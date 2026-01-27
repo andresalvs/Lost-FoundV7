@@ -1,0 +1,33 @@
+# Qwen2VL-2B Python Dependencies
+# Install with: pip install -r requirements.txt
+# Python 3.10+ recommended
+
+# Core ML Framework
+torch==2.1.2
+
+# Hugging Face Model Hub and Model
+transformers==4.36.2
+huggingface-hub>=0.17.0
+
+# Image Processing
+Pillow>=10.1.0
+
+# Web Server Framework
+Flask==3.0.0
+Flask-CORS==4.0.0
+
+# Scientific Computing
+numpy==1.24.3
+scipy==1.11.4
+
+# Model Optimization
+bitsandbytes>=0.42.0
+
+# Tokenization
+sentencepiece>=0.1.99
+
+# Optional: For API client testing
+requests>=2.31.0
+
+# Optional: For monitoring
+python-dotenv>=1.0.0

@@ -1,0 +1,172 @@
+<script setup>
+import { ref, onMounted, computed, watch, reactive } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import axios from "axios";
+import { toast } from 'vue3-toastify';
+import AdminSidebar from "../components/AdminSidebar.vue";
+import AdminNavbar from "../components/AdminNavbar.vue";
+import DashboardCard from "../components/DashboardCard.vue";
+import { initSocket } from "../socket";
+
+const API_BASE_URL = process.env.VUE_APP_API_URL || "http://localhost:5000";
+const router = useRouter();
+const route = useRoute();
+
+// Reactive State
+const showEmailChangedModal = ref(false);
+const emailChangedTimer = ref(null);
+const activePage = ref('dashboard');
+const activeReportTab = ref('Lost Reports');
+const reportTabs = ["Lost Reports", "Found Reports", "Returned History"];
+const userRoleFilter = ref("");
+
+// Users Management
+const users = ref([]);
+const userSearch = ref("");
+const selectedUser = ref(null);
+const userModal = ref(false);
+const isRoleChangeModalOpen = ref(false);
+const selectedRoleChangeUser = ref(null);
+const targetRole = ref('');
+const roleChangeMessage = ref('');
+const userDeleteConfirmation = ref(false);
+const selectedUserToDelete = ref(null);
+
+// Function to handle sidebar navigation
+const handleSidebarSelect = (page) => {
+  if (page === 'profile') {
+    router.push('/profile');
+  } else {
+    activePage.value = page;
+  }
+};
+
+// Filtered Users Computed
+const filteredUsers = computed(() => {
+  const search = userSearch.value?.trim().toLowerCase();
+  const role = userRoleFilter.value;
+
+  return users.value.filter(u => {
+    // Role filter
+    if (role) {
+      // normalize roles used in UI: 'security' | 'admin' | 'university_member'
+      if (u.role !== role) return false;
+    }
+
+    // Search filter
+    if (!search) return true;
+    return (
+      u.full_name?.toLowerCase().includes(search) ||
+      u.email?.toLowerCase().includes(search)
+    );
+  });
+});
+
+// User Management Functions
+const changeUserRole = (user, newRole) => {
+  // Don't allow changing own role
+  if (user.role === 'admin') {
+    toast.error("Cannot change role of an administrator");
+    return;
+  }
+
+  selectedRoleChangeUser.value = user;
+  targetRole.value = newRole;
+  isRoleChangeModalOpen.value = true;
+  const roleName = newRole === 'security' ? 'Security Staff' : 'University Member';
+  roleChangeMessage.value = `Are you sure you want to assign ${user.full_name || user.email} as ${roleName}?`;
+};
+
+const confirmRoleChange = async () => {
+  try {
+    const user = selectedRoleChangeUser.value;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Authentication token missing. Please log in again.");
+      return;
+    }
+
+    // Show loading state
+    const loadingToast = toast.loading(`Updating user role...`);
+
+    const response = await axios.put(
+      `${API_BASE_URL}/api/user/${user.id}/assign-role`,
+      { role: targetRole.value },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+
+    const updatedUser = response.data.user;
+    const index = users.value.findIndex(u => u.id === updatedUser.id);
+    if (index !== -1) {
+      users.value.splice(index, 1, updatedUser);
+    }
+
+    // Success feedback
+    toast.dismiss(loadingToast);
+    toast.success(`Successfully changed user role to ${targetRole.value === 'security' ? 'Security Staff' : 'University Member'}`);
+    
+    isRoleChangeModalOpen.value = false;
+    selectedRoleChangeUser.value = null;
+    targetRole.value = '';
+
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Failed to change user role");
+    console.error("Error changing role:", err);
+  }
+};
+
+const viewUser = (user) => {
+  selectedUser.value = user;
+  userModal.value = true;
+};
+
+const closeUserModal = () => {
+  userModal.value = false;
+  selectedUser.value = null;
+};
+
+const confirmUserDelete = (user) => {
+  selectedUserToDelete.value = user;
+  userDeleteConfirmation.value = true;
+};
+
+const deleteUserConfirmed = async () => {
+  try {
+    const user = selectedUserToDelete.value;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Missing authentication token. Please log in again.");
+      return;
+    }
+
+    // Show loading state
+    const loadingToast = toast.loading(`Deleting user...`);
+
+    await axios.delete(`${API_BASE_URL}/api/user/${user.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    // Update local state
+    users.value = users.value.filter(u => u.id !== user.id);
+    
+    // Success feedback
+    toast.dismiss(loadingToast);
+    toast.success(`User ${user.full_name || user.email} was successfully deleted`);
+
+    // Reset modal state
+    userDeleteConfirmation.value = false;
+    selectedUserToDelete.value = null;
+
+  } catch (err) {
+    console.error("Error deleting user:", err);
+    toast.error(err.response?.data?.message || "Failed to delete user. Please try again.");
+  }
+};
+
+const cancelUserDelete = () => {
+  userDeleteConfirmation.value = false;
+  selectedUserToDelete.value = null;
+};
+
+// Rest of your existing code...
+// (Keep all the other functions and logic below this point)

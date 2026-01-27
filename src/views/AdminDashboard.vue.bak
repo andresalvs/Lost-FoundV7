@@ -1,0 +1,1181 @@
+<template>
+  <div>
+    <!-- Email Changed Modal -->
+    <transition name="fade">
+      <div v-if="showEmailChangedModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+        <div class="bg-gray-900 border border-yellow-500 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div class="flex flex-col items-center space-y-4">
+            <svg class="h-12 w-12 text-yellow-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z" />
+            </svg>
+            <h2 class="text-2xl font-bold text-yellow-400">Admin Account Changed</h2>
+            <p class="text-gray-300">Your admin email or role has been updated.<br>Please log in again to continue.</p>
+            <button @click="logoutToLogin" class="mt-4 px-6 py-2 bg-yellow-500 text-black font-semibold rounded-xl hover:bg-yellow-400 transition duration-300">Go to Login</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+    <div class="flex h-screen bg-gray-800 text-white">
+      <!-- Sidebar -->
+      <AdminSidebar @select-page="handlePageSelect" />
+      <!-- Main Content -->
+      <div class="flex-1 flex flex-col">
+        <!-- Navbar -->
+        <AdminNavbar />
+        <main class="p-6 overflow-y-auto flex-1">
+          <!-- Dashboard Overview -->
+          <div v-if="activePage === 'dashboard'">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <DashboardCard title="Total Reports" :count="totalReports" color="yellow" />
+              <DashboardCard title="Resolved Items" :count="resolvedCount" color="green" />
+              <DashboardCard title="Pending Items" :count="pendingCount" color="red" />
+            </div>
+          </div>
+
+          <!-- ===================== -->
+          <!-- REPORTED ITEMS SECTION -->
+          <!-- ===================== -->
+          <div v-if="activePage === 'reported-items'">
+            <!-- Tabs -->
+            <div class="flex justify-center mb-6 space-x-4 relative">
+              <button
+                v-for="tab in reportTabs"
+                :key="tab"
+                @click="activeReportTab = tab"
+                class="px-4 py-2 rounded-lg transition"
+                :class="activeReportTab === tab
+                  ? 'bg-yellow-500 text-black'
+                  : 'bg-gray-800 text-white hover:bg-gray-700'"
+              >
+                {{ tab }}
+                <span
+                  v-if="getUnreadCount(tab) > 0"
+                  class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center"
+                >
+                  {{ getUnreadCount(tab) }}
+                </span>
+              </button>
+            </div>
+
+            <!-- Filter/Search -->
+            <div class="mb-4 flex justify-between items-center flex-wrap gap-2">
+              <input
+                v-model="reportSearch"
+                type="text"
+                placeholder="Search by Name or Student ID"
+                class="px-4 py-2 rounded-lg bg-gray-800 text-white w-64 focus:outline-none"
+              />
+              <select
+                v-model="categoryFilter"
+                class="px-4 py-2 rounded-lg bg-gray-800 text-white focus:outline-none"
+              >
+                <option value="">All Categories</option>
+                <option value="id">ID Items</option>
+                <option value="general">General Items</option>
+              </select>
+              <select
+                v-if="activeReportTab === 'Found Reports'"
+                v-model="statusFilter"
+                class="px-4 py-2 rounded-lg bg-gray-800 text-white focus:outline-none"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="in_security_custody">In Security Custody</option>
+              </select>
+            </div>
+
+            <!-- Report Table -->
+            <table class="min-w-full bg-gray-900 text-left text-sm text-gray-300 rounded-lg mb-6 border border-gray-700">
+              <thead>
+                <tr class="border-b border-gray-700 bg-gray-800 text-gray-300">
+                  <th class="px-4 py-2">Image</th>
+                  <th class="px-4 py-2">Name</th>
+                  <th class="px-4 py-2">Category</th>
+                  <th class="px-4 py-2">Details</th>
+                  <th class="px-4 py-2">Date</th>
+                  <th class="px-4 py-2">Status</th>
+                  <th class="px-4 py-2">Reported By</th>
+                  <th class="px-4 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="item in filteredReportItems"
+                  :key="item.id"
+                  class="border-b border-gray-700 hover:bg-gray-800"
+                >
+                  <td class="px-4 py-2">
+                    <img
+                      v-if="item.image_url && item.image_url !== 'null' && item.image_url.trim() !== '' && !item.imageError"
+                      :src="`${API_BASE_URL}${item.image_url}`"
+                      @error="item.imageError = true"
+                      class="w-12 h-12 object-cover rounded"
+                    />
+                    <span v-else class="text-gray-500">N/A</span>
+                  </td>
+                  <td class="px-4 py-2">{{ item.name || 'N/A' }}</td>
+                  <td class="px-4 py-2">{{ item.category || 'General' }}</td>
+                  <td class="px-4 py-2">{{ getItemDetails(item) }}</td>
+                  <td class="px-4 py-2">{{ formatDate(item.datetime) }}</td>
+                  <td class="px-4 py-2">{{ formatStatus(item.status) }}</td>
+                  <td class="px-4 py-2 flex items-center space-x-2">
+                    <img
+                      v-if="item.reporter_profile_picture && !item.reporterImageError"
+                      :src="`${API_BASE_URL}${item.reporter_profile_picture}`"
+                      @error="item.reporterImageError = true"
+                      class="w-8 h-8 rounded-full object-cover border border-gray-600"
+                    />
+                    <div
+                      v-else
+                      class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold"
+                    >
+                      {{ item.reporter_name ? item.reporter_name[0].toUpperCase() : '?' }}
+                    </div>
+                    <span>{{ item.reporter_name || 'Anonymous' }}</span>
+                  </td>
+                  <td class="px-4 py-2 space-x-2">
+                    <button
+                      @click="viewItem(item)"
+                      class="px-4 py-2 bg-yellow-500 text-black rounded hover:bg-yellow-600"
+                    >
+                      View
+                    </button>
+                    <button
+                      v-if="activeReportTab === 'Returned History'"
+                      @click="confirmDelete(item)"
+                      class="p-2 bg-red-500 text-white rounded hover:bg-red-600"
+                      title="Delete item"
+                    >
+                      <!-- 🗑️ Trash Icon -->
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- ===================== -->
+          <!-- ✅ ADMIN ACCOUNT UPDATE (REPLACES "Register Security Staff") -->
+          <!-- ===================== -->
+          <!-- Profile Section -->
+          <div v-if="activePage === 'profile'">
+            <h2 class="text-2xl font-semibold mb-6 text-yellow-400">My Profile</h2>
+            <div class="bg-gray-900 border border-gray-700 rounded-lg p-6">
+              <!-- Profile Header -->
+              <div class="flex items-center mb-6">
+                <div v-if="adminProfile.profile_picture" class="mr-4">
+                  <img :src="adminProfile.profile_picture.startsWith('http') ? adminProfile.profile_picture : `${API_BASE_URL}${adminProfile.profile_picture}`" 
+                       alt="Profile Picture" 
+                       class="w-24 h-24 rounded-full object-cover border-4 border-yellow-400"/>
+                </div>
+                <div v-else class="w-24 h-24 rounded-full bg-yellow-500 text-black flex items-center justify-center text-4xl font-bold mr-4">
+                  {{ adminProfile.full_name ? adminProfile.full_name[0].toUpperCase() : 'A' }}
+                </div>
+                <div>
+                  <h3 class="text-2xl font-semibold text-yellow-300">{{ adminProfile.full_name || 'Administrator' }}</h3>
+                  <p class="text-gray-400">{{ adminProfile.email }}</p>
+                  <p class="text-yellow-400 mt-1">Administrator</p>
+                </div>
+              </div>
+
+              <!-- Profile Details -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 class="text-lg font-semibold text-yellow-300 mb-4">Profile Information</h4>
+                  <div class="space-y-4">
+                    <div>
+                      <label class="block text-sm text-gray-400">Department</label>
+                      <p class="text-white">{{ adminProfile.department || 'Not specified' }}</p>
+                    </div>
+                    <div>
+                      <label class="block text-sm text-gray-400">Contact Number</label>
+                      <p class="text-white">{{ adminProfile.contact_number || 'Not specified' }}</p>
+                    </div>
+                    <div>
+                      <label class="block text-sm text-gray-400">Member Since</label>
+                      <p class="text-white">{{ formatDate(adminProfile.created_at) }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Account Settings Section -->
+                <div>
+                  <h4 class="text-lg font-semibold text-yellow-300 mb-4">Account Settings</h4>
+                  <form @submit.prevent="updateAdminAccount" class="space-y-4">
+                    <div>
+                      <label class="block text-sm text-gray-400 mb-1">New Email Address</label>
+                      <input
+                        v-model="profileForm.email"
+                        type="email"
+                        placeholder="admin@carsu.edu.ph"
+                        class="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-200 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                      />
+                    </div>
+
+                    <!-- Password Fields -->
+                    <div class="space-y-4">
+                      <div>
+                        <label class="block text-sm text-gray-400 mb-1">Current Password</label>
+                        <div class="relative">
+                          <input
+                            v-model="profileForm.oldPassword"
+                            :type="showOldPassword ? 'text' : 'password'"
+                            placeholder="Enter current password"
+                            class="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 pr-10"
+                          />
+                          <button
+                            type="button"
+                            @click="showOldPassword = !showOldPassword"
+                            class="absolute inset-y-0 right-0 px-3 flex items-center"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              class="h-5 w-5 text-gray-400"
+                              :class="{ 'text-yellow-400': showOldPassword }"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path v-if="showOldPassword" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" />
+                              <path v-if="showOldPassword" d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                              <path v-if="!showOldPassword" d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <path v-if="!showOldPassword" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm text-gray-400 mb-1">New Password</label>
+                        <div class="relative">
+                          <input
+                            v-model="profileForm.newPassword"
+                            :type="showNewPassword ? 'text' : 'password'"
+                            placeholder="Enter new password"
+                            class="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 pr-10"
+                          />
+                          <button
+                            type="button"
+                            @click="showNewPassword = !showNewPassword"
+                            class="absolute inset-y-0 right-0 px-3 flex items-center"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              class="h-5 w-5 text-gray-400"
+                              :class="{ 'text-yellow-400': showNewPassword }"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path v-if="showNewPassword" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" />
+                              <path v-if="showNewPassword" d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                              <path v-if="!showNewPassword" d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <path v-if="!showNewPassword" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm text-gray-400 mb-1">Confirm New Password</label>
+                        <div class="relative">
+                          <input
+                            v-model="profileForm.confirmNewPassword"
+                            :type="showConfirmPassword ? 'text' : 'password'"
+                            placeholder="Confirm new password"
+                            class="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 pr-10"
+                          />
+                          <button
+                            type="button"
+                            @click="showConfirmPassword = !showConfirmPassword"
+                            class="absolute inset-y-0 right-0 px-3 flex items-center"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              class="h-5 w-5 text-gray-400"
+                              :class="{ 'text-yellow-400': showConfirmPassword }"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path v-if="showConfirmPassword" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" />
+                              <path v-if="showConfirmPassword" d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                              <path v-if="!showConfirmPassword" d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <path v-if="!showConfirmPassword" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Error/Success Messages -->
+                    <div v-if="profileFormError" class="text-red-500 text-sm mt-2">{{ profileFormError }}</div>
+                    <div v-if="profileFormSuccess" class="text-green-500 text-sm mt-2">{{ profileFormSuccess }}</div>
+
+                    <!-- Submit Button -->
+                    <button
+                      type="submit"
+                      class="w-full px-4 py-2 bg-yellow-500 text-black rounded hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-gray-900 font-medium"
+                      :disabled="profileFormLoading"
+                    >
+                      {{ profileFormLoading ? 'Updating...' : 'Update Profile' }}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Users Section -->
+          <div v-if="activePage === 'users'">
+            <h2 class="text-2xl font-semibold mb-6 text-yellow-400">Admin Account</h2>
+            <div class="bg-gray-900 border border-gray-700 rounded-lg p-5 mb-6">
+              <h3 class="text-lg font-semibold text-yellow-300">User Management</h3>
+              <p class="text-sm text-gray-400 mt-1">
+                Manage user accounts, roles, and permissions.
+              </p>
+              
+              <form @submit.prevent="updateAdminAccount" class="mt-4 grid grid-cols-1 gap-4">
+                <!-- Email Field -->
+                <div class="flex flex-col">
+                  <label class="text-sm text-gray-300 mb-1">New Email Address</label>
+                  <input
+                    v-model="profileForm.email"
+                    type="email"
+                    placeholder="admin@carsu.edu.ph"
+                    class="px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-200 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                  />
+                </div>
+                <!-- Old Password -->
+                <div class="flex flex-col">
+                  <label class="text-sm text-gray-300 mb-1">Current Password</label>
+                  <div class="relative">
+                    <input
+                      v-model="profileForm.oldPassword"
+                      :type="showOldPassword ? 'text' : 'password'"
+                      required
+                      placeholder="Enter your current password"
+                      class="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 pr-10"
+                    />
+                    <button
+                      type="button"
+                      @click="showOldPassword = !showOldPassword"
+                      class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-yellow-400"
+                    >
+                      <svg v-if="showOldPassword" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10a9.99 9.99 0 012.192-5.877" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.6 6.6L17.4 17.4" />
+                      </svg>
+                      <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        <circle cx="12" cy="12" r="3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <!-- New Password -->
+                <div class="flex flex-col">
+                  <label class="text-sm text-gray-300 mb-1">New Password</label>
+                  <div class="relative">
+                    <input
+                      v-model="profileForm.newPassword"
+                      :type="showNewPassword ? 'text' : 'password'"
+                      placeholder="Enter new password"
+                      class="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 pr-10"
+                    />
+                    <button
+                      type="button"
+                      @click="showNewPassword = !showNewPassword"
+                      class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-yellow-400"
+                    >
+                      <svg v-if="showNewPassword" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10a9.99 9.99 0 012.192-5.877" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.6 6.6L17.4 17.4" />
+                      </svg>
+                      <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        <circle cx="12" cy="12" r="3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <!-- Confirm New Password -->
+                <div class="flex flex-col">
+                  <label class="text-sm text-gray-300 mb-1">Confirm New Password</label>
+                  <div class="relative">
+                    <input
+                      v-model="profileForm.confirmNewPassword"
+                      :type="showConfirmPassword ? 'text' : 'password'"
+                      placeholder="Re-enter new password"
+                      class="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 pr-10"
+                    />
+                    <button
+                      type="button"
+                      @click="showConfirmPassword = !showConfirmPassword"
+                      class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-yellow-400"
+                    >
+                      <svg v-if="showConfirmPassword" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10a9.99 9.99 0 012.192-5.877" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.6 6.6L17.4 17.4" />
+                      </svg>
+                      <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        <circle cx="12" cy="12" r="3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <!-- Submit Button -->
+                <div class="flex flex-col items-start gap-2">
+                  <button
+                    type="submit"
+                    :disabled="profileFormLoading"
+                    class="px-4 py-2 bg-yellow-500 text-black rounded hover:bg-yellow-400 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {{ profileFormLoading ? 'Updating...' : 'Update Account' }}
+                  </button>
+                  <p v-if="profileFormError" class="text-sm text-red-400">{{ profileFormError }}</p>
+                  <p v-if="profileFormSuccess" class="text-sm text-green-400">{{ profileFormSuccess }}</p>
+                </div>
+              </form>
+            </div>
+
+            <!-- Optional: Keep user management table below -->
+            <h3 class="text-xl font-semibold mb-4 text-yellow-400">Manage Other Users</h3>
+            <div class="mb-4 flex justify-between items-center flex-wrap gap-2">
+              <input
+                v-model="userSearch"
+                type="text"
+                placeholder="Search by Name or Email"
+                class="px-4 py-2 rounded-lg bg-gray-800 text-white w-64 focus:outline-none"
+              />
+            </div>
+            <table class="min-w-full bg-gray-900 text-left text-sm text-gray-300 rounded-lg mb-6 border border-gray-700">
+              <thead>
+                <tr class="border-b border-gray-700 bg-gray-800 text-gray-300">
+                  <th class="px-4 py-2">Profile</th>
+                  <th class="px-4 py-2">Name</th>
+                  <th class="px-4 py-2">Email</th>
+                  <th class="px-4 py-2">Role</th>
+                  <th class="px-4 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="user in filteredUsers"
+                  :key="user.id"
+                  class="border-b border-gray-700 hover:bg-gray-800"
+                >
+                  <td class="px-4 py-2">
+                    <img
+                      v-if="user.profile_picture"
+                      :src="`${API_BASE_URL}${user.profile_picture}`"
+                      class="w-10 h-10 rounded-full object-cover border border-gray-600"
+                    />
+                    <div
+                      v-else
+                      class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold"
+                    >
+                      {{ user.full_name ? user.full_name[0].toUpperCase() : '?' }}
+                    </div>
+                  </td>
+                  <td class="px-4 py-2">{{ user.full_name || 'N/A' }}</td>
+                  <td class="px-4 py-2">{{ user.email || 'N/A' }}</td>
+                  <td class="px-4 py-2">
+                    <span v-if="user.role === 'security'">Security staff</span>
+                    <span v-else-if="user.role === 'admin'">Administrator</span>
+                    <span v-else>University member</span>
+                  </td>
+                  <td class="px-4 py-2">
+                    <div class="flex justify-between items-center min-w-[180px]">
+                      <button
+                        @click="viewUser(user)"
+                        class="px-3 py-1 text-sm bg-yellow-500 text-black rounded hover:bg-yellow-600 whitespace-nowrap"
+                      >
+                        View
+                      </button>
+                      <div class="flex gap-1">
+                        <button
+                          v-if="user.role === 'university_member'"
+                          @click="changeUserRole(user, 'security')"
+                          class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 whitespace-nowrap"
+                        >
+                          Assign as Security
+                        </button>
+                        <button
+                          v-else-if="user.role === 'security'"
+                          @click="changeUserRole(user, 'university_member')"
+                          class="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 whitespace-nowrap"
+                        >
+                          Revert to University Member
+                        </button>
+                      </div>
+                      <button
+                        v-if="user.role !== 'admin'"
+                        @click="confirmUserDelete(user)"
+                        class="p-2 bg-red-500 text-white rounded hover:bg-red-600"
+                        title="Delete user"
+                      >
+                        <!-- 🗑️ Trash Icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+/* eslint-disable no-unused-vars */
+import { ref, reactive, computed, onMounted, onActivated, watch, onUnmounted } from "vue";
+import { useRouter } from "vue-router";
+import axios from "axios";
+import initSocket from "../socket";
+import AdminSidebar from '../components/AdminSidebar.vue';
+import AdminNavbar from '../components/AdminNavbar.vue';
+import DashboardCard from '../components/DashboardCard.vue';
+import { formatDate } from '../utils/formatDate';
+
+const API_BASE_URL = "http://localhost:5000";
+const router = useRouter();
+
+// Email change modal state
+const showEmailChangedModal = ref(false);
+const emailChangedTimer = ref(null);
+
+// Logout helper function
+const logoutToLogin = () => {
+  localStorage.removeItem('token');
+  router.push('/admin-login');
+};
+
+// ====================
+// Persisted Page State
+// ====================
+const activePage = ref(localStorage.getItem('admin-active-page') || 'dashboard');
+const activeReportTab = ref(localStorage.getItem('admin-active-report-tab') || 'Lost Reports');
+
+// ====================
+// Admin Profile State
+// ====================
+const adminProfile = ref({
+  full_name: '',
+  email: '',
+  department: '',
+  contact_number: '',
+  profile_picture: '',
+  created_at: ''
+});
+
+// Using formatDate helper defined at the top
+
+// Fetch admin profile
+const fetchAdminProfile = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    const response = await axios.get(`${API_BASE_URL}/api/profile`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    adminProfile.value = response.data;
+    
+    // Update profileForm with current email
+    profileForm.email = response.data.email || '';
+  } catch (error) {
+    console.error('Error fetching admin profile:', error);
+  }
+};
+watch(activePage, (newPage) => {
+  localStorage.setItem('admin-active-page', newPage);
+  // Refresh profile when switching to profile page
+  if (newPage === 'profile') {
+    fetchAdminProfile();
+  }
+});
+watch(activeReportTab, (newTab) => {
+  localStorage.setItem('admin-active-report-tab', newTab);
+});
+
+// Watch for admin profile updates
+watch(adminProfile, (newProfile) => {
+  if (newProfile && Object.keys(newProfile).length > 0) {
+    // Update local storage user data to keep it in sync
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const updatedUser = { ...currentUser, ...newProfile };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    } catch (err) {
+      console.error('Error updating local storage with profile:', err);
+    }
+  }
+}, { deep: true });
+
+// ====================
+// Static Data
+// ====================
+const reportTabs = ["Lost Reports", "Found Reports", "Returned History"];
+const handlePageSelect = (page) => {
+  activePage.value = page; // Simplified: no /profile route needed
+};
+
+// ====================
+// Reported Items
+// ====================
+const lostItems = ref([]);
+const foundItems = ref([]);
+const returnedHistory = ref([]);
+const reportSearch = ref("");
+const categoryFilter = ref("");
+const statusFilter = ref("");
+
+// ====================
+// Users
+// ====================
+const users = ref([]);
+const userSearch = ref("");
+const selectedUser = ref(null);
+const userModal = ref(false);
+// ✅ Removed staffForm — no longer needed
+
+// ====================
+// Admin Profile Form ✅
+// ====================
+const profileForm = reactive({
+  email: "",
+  oldPassword: "",
+  newPassword: "",
+  confirmNewPassword: "",
+});
+const profileFormError = ref("");
+const profileFormSuccess = ref("");
+const profileFormLoading = ref(false);
+const showOldPassword = ref(false);
+const showNewPassword = ref(false);
+const showConfirmPassword = ref(false);
+
+// ====================
+// Role & Delete Modal State
+// ====================
+const isRoleChangeModalOpen = ref(false);
+const selectedRoleChangeUser = ref(null);
+const targetRole = ref('');
+const roleChangeMessage = ref('');
+const userDeleteConfirmation = ref(false);
+const selectedUserToDelete = ref(null);
+
+// ====================
+// Shared Modals
+// ====================
+const selectedItem = ref(null);
+const deleteConfirmation = ref(false);
+const imageError = ref(false);
+const reporterImageError = ref(false);
+
+// ====================
+// Socket
+// ====================
+const socket = initSocket();
+const autoDeletedIds = new Set();
+
+// ====================
+// Fetching
+// ====================
+const fetchItems = async () => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/items`);
+    const rawData = Array.isArray(res.data) ? res.data : [];
+    const nextLost = [];
+    const nextFound = [];
+    const nextReturned = [];
+    for (const record of rawData) {
+      const item = { ...record, imageError: false, reporterImageError: false };
+      const removed = await maybeAutoDeleteReturnedLost(item);
+      if (removed) continue;
+      if (item.type === "lost") nextLost.push(item);
+      if (item.type === "found" && item.status !== "returned") nextFound.push(item);
+      if (item.status === "returned") nextReturned.push(item);
+    }
+    lostItems.value = nextLost;
+    foundItems.value = nextFound;
+    returnedHistory.value = nextReturned;
+  } catch (err) {
+    console.error("Error fetching items:", err);
+  }
+};
+
+const fetchUsers = async () => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/user`);
+    const toRole = (role) => {
+      if (!role) return "university_member";
+      if (role === "security_staff") return "security";
+      return role;
+    };
+    users.value = res.data.map((u) => ({ ...u, role: toRole(u.role) }));
+  } catch (err) {
+    console.error("Error fetching users:", err);
+  }
+};
+
+// Fetch reports / unread counts. Backend may expose a dedicated endpoint; fallback to computing from local lists
+const fetchReports = async () => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/reports/unread-counts`);
+    const data = res.data || {};
+    unreadLostCount.value = Number(data.lost) || 0;
+    unreadFoundCount.value = Number(data.found) || 0;
+    unreadReturnedCount.value = Number(data.returned) || 0;
+  } catch (err) {
+    // Fallback: compute from local arrays if the backend endpoint doesn't exist
+    try {
+      unreadLostCount.value = (lostItems.value || []).filter(i => i.is_read === false || i.unread === true).length || 0;
+      unreadFoundCount.value = (foundItems.value || []).filter(i => i.is_read === false || i.unread === true).length || 0;
+      unreadReturnedCount.value = (returnedHistory.value || []).filter(i => i.is_read === false || i.unread === true).length || 0;
+    } catch (e) {
+      unreadLostCount.value = 0;
+      unreadFoundCount.value = 0;
+      unreadReturnedCount.value = 0;
+    }
+  }
+};
+
+// ====================
+// Users Management
+// ====================
+const filteredUsers = computed(() => {
+  if (!userSearch.value) return users.value;
+  return users.value.filter(u =>
+    u.full_name?.toLowerCase().includes(userSearch.value.toLowerCase()) ||
+    u.email?.toLowerCase().includes(userSearch.value.toLowerCase())
+  );
+});
+
+const viewUser = (user) => {
+  selectedUser.value = user;
+  userModal.value = true;
+};
+
+const closeUserModal = () => {
+  userModal.value = false;
+  selectedUser.value = null;
+};
+
+const confirmUserDelete = (user) => {
+  selectedUserToDelete.value = user;
+  userDeleteConfirmation.value = true;
+};
+
+const deleteUserConfirmed = async () => {
+  try {
+    const user = selectedUserToDelete.value;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.error("Missing authentication token. Unable to delete user.");
+      return;
+    }
+    await axios.delete(`${API_BASE_URL}/api/user/${user.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    users.value = users.value.filter(u => u.id !== user.id);
+    userDeleteConfirmation.value = false;
+    selectedUserToDelete.value = null;
+    alert("User deleted successfully.");
+  } catch (err) {
+    console.error("Error deleting user:", err);
+    alert("Failed to delete user.");
+  }
+};
+
+const cancelUserDelete = () => {
+  userDeleteConfirmation.value = false;
+  selectedUserToDelete.value = null;
+};
+
+// ====================
+// Role Change Logic
+// ====================
+const changeUserRole = (user, newRole) => {
+  selectedRoleChangeUser.value = user;
+  targetRole.value = newRole;
+  isRoleChangeModalOpen.value = true;
+  const roleName = newRole === 'security' ? 'Security Staff' : 'University Member';
+  roleChangeMessage.value = `Are you sure you want to assign ${user.full_name || user.email} as ${roleName}?`;
+};
+
+const confirmRoleChange = async () => {
+  try {
+    const user = selectedRoleChangeUser.value;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Authentication token missing. Please log in again.");
+      return;
+    }
+    const response = await axios.put(
+      `${API_BASE_URL}/api/user/${user.id}/assign-role`,
+      { role: targetRole.value },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    const updatedUser = response.data.user;
+    const index = users.value.findIndex(u => u.id === updatedUser.id);
+    if (index !== -1) {
+      users.value.splice(index, 1, updatedUser);
+    }
+    isRoleChangeModalOpen.value = false;
+    const roleName = targetRole.value === 'security' ? 'Security Staff' : 'University Member';
+    alert(`${user.full_name || user.email} has been updated to ${roleName}.`);
+  } catch (error) {
+    console.error("Error changing user role:", error);
+    // ... error handling (kept as-is)
+  }
+};
+
+const cancelRoleChange = () => {
+  isRoleChangeModalOpen.value = false;
+  selectedRoleChangeUser.value = null;
+  targetRole.value = '';
+};
+
+// ====================
+// ✅ Admin Account Update Function
+// ====================
+const updateAdminAccount = async () => {
+  profileFormError.value = "";
+  profileFormSuccess.value = "";
+  const token = localStorage.getItem("token");
+  if (!token) {
+    profileFormError.value = "Authentication expired. Please sign in again.";
+    setTimeout(() => { profileFormError.value = ""; }, 4000);
+    return;
+  }
+  if (profileForm.newPassword && profileForm.newPassword !== profileForm.confirmNewPassword) {
+    profileFormError.value = "New passwords do not match.";
+    setTimeout(() => { profileFormError.value = ""; }, 4000);
+    return;
+  }
+  profileFormLoading.value = true;
+    try {
+      const payload = {};
+      if (profileForm.email) payload.email = profileForm.email.trim();
+      if (profileForm.oldPassword) payload.oldPassword = profileForm.oldPassword;
+      if (profileForm.newPassword) {
+        payload.newPassword = profileForm.newPassword;
+        // backend expects 'confirmPassword' for confirmation
+        payload.confirmPassword = profileForm.confirmNewPassword;
+      }
+
+      const response = await axios.patch(
+        `${API_BASE_URL}/api/user/profile`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      );
+
+      // Refresh profile data after successful update
+      await fetchAdminProfile();
+
+      // Reset form
+      profileForm.email = "";
+      profileForm.oldPassword = "";
+      profileForm.newPassword = "";
+      profileForm.confirmNewPassword = "";
+
+      // If backend indicated verification required (email change), show message and keep session
+      if (response.data?.needsVerification) {
+        profileFormSuccess.value = response.data.message || 'Verification email sent. Please check your new email to confirm the change.';
+        setTimeout(() => { profileFormSuccess.value = ""; }, 8000);
+        return;
+      }
+
+      // For password changes (or other immediate updates), force re-login
+      alert("Account updated. Please sign in again with your new credentials.");
+      localStorage.removeItem('token');
+      router.push('/admin-login');
+    } catch (err) {
+      const message = err.response?.data?.error || "Failed to update account.";
+      profileFormError.value = message;
+      console.error("Error updating admin account:", err);
+      setTimeout(() => { profileFormError.value = ""; }, 5000);
+    } finally {
+      profileFormLoading.value = false;
+    }
+};
+
+// ====================
+// Rest of logic (item management, stats, socket, etc.) remains unchanged
+// ====================
+const viewReporterProfile = (reporterId) => {
+  if (reporterId) router.push(`/view-profile/${reporterId}`);
+};
+
+// Open the logged-in user's profile page (include id if available)
+const openProfile = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem('user') || 'null');
+    if (stored && stored.id) {
+      router.push(`/profile/${stored.id}`);
+      return;
+    }
+  } catch (err) {
+    // fall back to profile route without id
+  }
+  router.push('/profile');
+};
+
+const filteredReportItems = computed(() => {
+  let items = [];
+  if (activeReportTab.value === "Lost Reports") items = lostItems.value;
+  else if (activeReportTab.value === "Found Reports") items = foundItems.value;
+  else if (activeReportTab.value === "Returned History") items = returnedHistory.value;
+  if (reportSearch.value) {
+    items = items.filter(i =>
+      i.name?.toLowerCase().includes(reportSearch.value.toLowerCase()) ||
+      (i.student_id && i.student_id.includes(reportSearch.value))
+    );
+  }
+  if (categoryFilter.value) items = items.filter(i => i.category === categoryFilter.value);
+  if (statusFilter.value && activeReportTab.value === "Found Reports") {
+    items = items.filter(i => i.status === statusFilter.value);
+  }
+  return items;
+});
+
+const viewItem = (item) => {
+  selectedItem.value = item;
+  imageError.value = false;
+  reporterImageError.value = false;
+  deleteConfirmation.value = false;
+};
+
+const closeModal = () => selectedItem.value = null;
+
+const confirmDelete = (item) => {
+  selectedItem.value = item;
+  deleteConfirmation.value = true;
+};
+
+const deleteReportConfirmed = async () => {
+  try {
+    const response = await axios.delete(
+      `${API_BASE_URL}/api/items/${selectedItem.value.id}`
+    );
+    const deletedIds = Array.isArray(response.data?.deleted_ids)
+      ? response.data.deleted_ids
+      : [selectedItem.value.id];
+    deletedIds.forEach((deletedId) => {
+      autoDeletedIds.add(deletedId);
+      removeItemFromLists(deletedId);
+    });
+    deleteConfirmation.value = false;
+    selectedItem.value = null;
+  } catch (err) {
+    console.error("Error deleting item:", err);
+  }
+};
+
+const cancelDelete = () => {
+  deleteConfirmation.value = false;
+  selectedItem.value = null;
+};
+
+const removeItemFromLists = (id) => {
+  lostItems.value = lostItems.value.filter(i => i.id !== id);
+  foundItems.value = foundItems.value.filter(i => i.id !== id);
+  returnedHistory.value = returnedHistory.value.filter(i => i.id !== id);
+  if (selectedItem.value?.id === id) selectedItem.value = null;
+};
+
+async function maybeAutoDeleteReturnedLost(item) {
+  if (!item || item.type !== "lost" || item.status !== "returned") return false;
+  if (!item.id || autoDeletedIds.has(item.id)) return false;
+  try {
+    await axios.delete(`${API_BASE_URL}/api/items/${item.id}`);
+    autoDeletedIds.add(item.id);
+    removeItemFromLists(item.id);
+    return true;
+  } catch (err) {
+    console.error("Error auto-deleting returned lost item:", err);
+    return false;
+  }
+}
+
+const getItemDetails = (item) => {
+  if (item.category === "id" && item.student_id) return `Student ID: ${item.student_id}`;
+  if (item.brand || item.color) return `Brand: ${item.brand || "N/A"}, Color: ${item.color || "N/A"}`;
+  return "N/A";
+};
+
+// Using the formatDate helper defined at the top
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+};
+
+const formatStatus = (status) =>
+  status
+    .split("_")
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
+const totalReports = computed(() =>
+  lostItems.value.length + foundItems.value.length + returnedHistory.value.length
+);
+const resolvedCount = computed(() =>
+  foundItems.value.filter(i => i.status !== "pending").length +
+  returnedHistory.value.length
+);
+const pendingCount = computed(() =>
+  lostItems.value.filter(i => i.status === "pending").length +
+  foundItems.value.filter(i => i.status === "pending").length
+);
+
+const unreadLostCount = ref(0);
+const unreadFoundCount = ref(0);
+const unreadReturnedCount = ref(0);
+
+const getUnreadCount = (tab) => {
+  switch (tab) {
+    case "Lost Reports": return unreadLostCount.value;
+    case "Found Reports": return unreadFoundCount.value;
+    case "Returned History": return unreadReturnedCount.value;
+    default: return 0;
+  }
+};
+
+socket.on("newReport", async (report) => {
+  const item = { ...report, imageError: false, reporterImageError: false };
+  if (await maybeAutoDeleteReturnedLost(item)) return;
+  if (item.type === "lost") lostItems.value.unshift(item);
+  else if (item.type === "found") foundItems.value.unshift(item);
+  else if (item.status === "returned") returnedHistory.value.unshift(item);
+});
+
+socket.on("reportUpdated", async (updatedReport) => {
+  if (await maybeAutoDeleteReturnedLost(updatedReport)) return;
+  const normalized = {
+    ...updatedReport,
+    imageError: false,
+    reporterImageError: false,
+  };
+  removeItemFromLists(normalized.id);
+  if (normalized.status === "returned") returnedHistory.value.unshift(normalized);
+  else if (normalized.type === "found") foundItems.value.unshift(normalized);
+  else lostItems.value.unshift(normalized);
+});
+
+socket.on("reportDeleted", ({ id }) => {
+  removeItemFromLists(id);
+});
+
+// Admin profile data
+const adminProfile = ref({
+  full_name: '',
+  email: '',
+  department: '',
+  contact_number: '',
+  profile_picture: '',
+  created_at: ''
+});
+
+// Fetch admin profile
+const fetchAdminProfile = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    const response = await axios.get(`${API_BASE_URL}/api/profile`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    adminProfile.value = response.data;
+  } catch (error) {
+    console.error('Error fetching admin profile:', error);
+  }
+};
+
+onMounted(() => {
+  fetchItems();
+  fetchUsers();
+  fetchAdminProfile();
+  // If redirected here after email verification, capture token and show success
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('status') === 'email-verified') {
+      const newToken = params.get('token');
+      if (newToken) {
+        localStorage.setItem('token', newToken);
+        profileFormSuccess.value = 'Email change verified and updated.';
+        setTimeout(() => { profileFormSuccess.value = ''; }, 5000);
+      }
+      // Clean the query string to avoid repeating the message
+      if (window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        url.search = '';
+        window.history.replaceState({}, document.title, url.toString());
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  // Check for email-changed status in query params
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('status') === 'email-changed') {
+      showEmailChangedModal.value = true;
+      // Clean the query string
+      if (window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        url.search = '';
+        window.history.replaceState({}, document.title, url.toString());
+      }
+      // Auto-logout after 7 seconds if user doesn't click
+      emailChangedTimer.value = setTimeout(() => {
+        if (showEmailChangedModal.value) logoutToLogin();
+      }, 7000);
+    }
+  } catch (err) {
+    console.error('Error checking email change status:', err);
+  }
+});
+
+// When component is re-activated from keep-alive (navigated back to), refresh datasets
+onActivated(() => {
+  // Only re-fetch if lists are empty or you want to sync
+  try {
+    // lightweight sync: fetch users and unread counts, and items if lists empty
+    if (!users.value || users.value.length === 0) fetchUsers();
+    if ((!lostItems.value || lostItems.value.length === 0) && (!foundItems.value || foundItems.value.length === 0)) fetchItems();
+    // refresh reports and counts
+    fetchReports();
+  } catch (err) {
+    console.error('Error during onActivated refresh:', err);
+  }
+});
+
+onUnmounted(() => {
+  if (emailChangedTimer.value) {
+    clearTimeout(emailChangedTimer.value);
+    emailChangedTimer.value = null;
+  }
+});
+</script>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+</style>

@@ -1,0 +1,93 @@
+# Lost and Found V7 - Python Requirements
+# Install with: pip install -r requirements.txt
+#
+# NOTE: This project is primarily Node.js based (Vue.js frontend + Express backend).
+# Python is only used for the Qwen2VL-2B AI model server.
+#
+# ⚠️ IMPORTANT: Most Python dependencies are in qwen2vl2b/requirements.txt
+# This file contains optional general utilities for Python scripts.
+
+# ============================================================================
+# AI Model Server (Qwen2VL-2B) - CRITICAL
+# ============================================================================
+# The main Python dependencies are in: qwen2vl2b/requirements.txt
+# These include:
+# - torch: 2.1.2
+# - transformers: 4.36.2
+# - Flask: 3.0.0
+# - Flask-CORS: 4.0.0
+# - Pillow: 10.1.0
+# - numpy: 1.24.3
+# - scipy: 1.11.4
+# - bitsandbytes: 0.42.0
+# - sentencepiece: 0.1.99
+#
+# To install Qwen2VL dependencies:
+# cd qwen2vl2b && pip install -r requirements.txt
+
+# ============================================================================
+# General Utilities (Optional)
+# ============================================================================
+
+# Environment variable management
+python-dotenv==1.0.0
+
+# HTTP requests library (if needed for API calls)
+requests==2.31.0
+
+# ============================================================================
+# Development & Testing (Optional)
+# ============================================================================
+
+# Testing framework
+pytest==7.4.3
+
+# Code formatting
+black==23.12.1
+
+# Code linting
+pylint==3.0.3
+
+# Type checking
+mypy==1.7.1
+
+# ============================================================================
+# Node.js Dependencies
+# ============================================================================
+# Frontend and Backend use npm packages:
+#
+# Frontend (npm install):
+# - vue: ^3.2.13
+# - vue-router: ^4.5.1
+# - pinia: ^3.0.4
+# - tailwindcss: ^3.4.13
+# - jspdf: ^3.0.3
+# - axios: ^1.12.2
+# - ... and more (see root package.json)
+#
+# Backend (cd backend && npm install):
+# - express: ^4.19.2
+# - pg: ^8.11.3
+# - bcrypt: ^5.1.1
+# - jsonwebtoken: ^9.0.2
+# - socket.io: ^4.8.1
+# - ... and more (see backend/package.json)
+
+# ============================================================================
+# Installation Instructions
+# ============================================================================
+#
+# 1. For AI Model (Qwen2VL):
+#    cd qwen2vl2b
+#    python -m venv .venv
+#    source .venv/bin/activate  (or .\.venv\Scripts\activate on Windows)
+#    pip install -r requirements.txt
+#
+# 2. For Frontend & Backend:
+#    npm install
+#    cd backend && npm install
+#
+# 3. For optional Python utilities:
+#    pip install -r requirements.txt  (in project root)
+#
+# ============================================================================

@@ -1,0 +1,243 @@
+// State Management
+const currentUser = ref(null);
+const hasIncompleteProfile = ref(false);
+
+// Load user data
+const loadUserData = () => {
+  const userData = localStorage.getItem('user');
+  if (userData) {
+    currentUser.value = JSON.parse(userData);
+    checkProfileCompleteness();
+  }
+};
+
+// Check if profile is complete
+const checkProfileCompleteness = () => {
+  const userProfile = currentUser.value?.profile || {};
+  hasIncompleteProfile.value = !userProfile.full_name || !userProfile.contact_number || !userProfile.profile_picture;
+};
+
+// Profile picture error handling
+const handleProfileImageError = (event) => {
+  event.target.src = ''; // Clear the broken image
+};
+
+// Profile picture management
+const handleProfilePictureUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('profile_picture', file);
+
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.post(`${API_BASE_URL}/api/user/profile-picture`, formData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    // Update local user data
+    currentUser.value.profile.profile_picture = response.data.profile_picture;
+    localStorage.setItem('user', JSON.stringify(currentUser.value));
+    
+    checkProfileCompleteness();
+  } catch (error) {
+    console.error('Error uploading profile picture:', error);
+    alert('Failed to upload profile picture.');
+  }
+};
+
+const deleteProfilePicture = async () => {
+  if (!confirm('Are you sure you want to remove your profile picture?')) return;
+  
+  try {
+    const token = localStorage.getItem('token');
+    await axios.delete(`${API_BASE_URL}/api/user/profile-picture`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    // Update local user data
+    currentUser.value.profile.profile_picture = null;
+    localStorage.setItem('user', JSON.stringify(currentUser.value));
+    
+    checkProfileCompleteness();
+  } catch (error) {
+    console.error('Error removing profile picture:', error);
+    alert('Failed to remove profile picture.');
+  }
+};
+
+const openUserProfile = () => {
+  router.push('/user-profile');
+};
+
+// ====================
+// Modal Functions
+// ====================
+const closeUserModal = () => {
+  userModal.value = false;
+  selectedUser.value = null;
+};
+
+const deleteUserConfirmed = async () => {
+  try {
+    const user = selectedUserToDelete.value;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.error("Missing authentication token. Unable to delete user.");
+      return;
+    }
+    await axios.delete(`${API_BASE_URL}/api/user/${user.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    users.value = users.value.filter(u => u.id !== user.id);
+    userDeleteConfirmation.value = false;
+    selectedUserToDelete.value = null;
+    alert("User deleted successfully.");
+  } catch (err) {
+    console.error("Error deleting user:", err);
+    alert("Failed to delete user.");
+  }
+};
+
+const cancelUserDelete = () => {
+  userDeleteConfirmation.value = false;
+  selectedUserToDelete.value = null;
+};
+
+const confirmRoleChange = async () => {
+  try {
+    const user = selectedRoleChangeUser.value;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Authentication token missing. Please log in again.");
+      return;
+    }
+    const response = await axios.put(
+      `${API_BASE_URL}/api/user/${user.id}/assign-role`,
+      { role: targetRole.value },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    const updatedUser = response.data.user;
+    const index = users.value.findIndex(u => u.id === updatedUser.id);
+    if (index !== -1) {
+      users.value.splice(index, 1, updatedUser);
+    }
+    isRoleChangeModalOpen.value = false;
+    const roleName = targetRole.value === 'security' ? 'Security Staff' : 'University Member';
+    alert(`${user.full_name || user.email} has been updated to ${roleName}.`);
+  } catch (error) {
+    console.error("Error changing user role:", error);
+    // ... error handling (kept as-is)
+  }
+};
+
+const cancelRoleChange = () => {
+  isRoleChangeModalOpen.value = false;
+  selectedRoleChangeUser.value = null;
+  targetRole.value = '';
+};
+
+const viewReporterProfile = (reporterId) => {
+  if (reporterId) router.push(`/view-profile/${reporterId}`);
+};
+
+const closeModal = () => selectedItem.value = null;
+
+const deleteReportConfirmed = async () => {
+  try {
+    const response = await axios.delete(
+      `${API_BASE_URL}/api/items/${selectedItem.value.id}`
+    );
+    const deletedIds = Array.isArray(response.data?.deleted_ids)
+      ? response.data.deleted_ids
+      : [selectedItem.value.id];
+    deletedIds.forEach((deletedId) => {
+      autoDeletedIds.add(deletedId);
+      removeItemFromLists(deletedId);
+    });
+    deleteConfirmation.value = false;
+    selectedItem.value = null;
+  } catch (err) {
+    console.error("Error deleting item:", err);
+  }
+};
+
+const cancelDelete = () => {
+  deleteConfirmation.value = false;
+  selectedItem.value = null;
+};
+
+const showEmailChangedModal = ref(false);
+const hasIncompleteProfile = ref(false);
+let emailChangedTimer = null;
+
+const checkProfileCompleteness = () => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const userProfile = user?.profile || {};
+  hasIncompleteProfile.value = !userProfile.full_name || !userProfile.contact_number || !userProfile.profile_picture;
+};
+
+// Profile picture management
+const handleProfilePictureUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('profile_picture', file);
+
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.post(`${API_BASE_URL}/api/user/profile-picture`, formData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    // Update local user data with new profile picture
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    user.profile.profile_picture = response.data.profile_picture;
+    localStorage.setItem('user', JSON.stringify(user));
+    
+    checkProfileCompleteness();
+    alert('Profile picture updated successfully!');
+  } catch (error) {
+    console.error('Error uploading profile picture:', error);
+    alert('Failed to upload profile picture.');
+  }
+};
+
+const deleteProfilePicture = async () => {
+  if (!confirm('Are you sure you want to remove your profile picture?')) return;
+  
+  try {
+    const token = localStorage.getItem('token');
+    await axios.delete(`${API_BASE_URL}/api/user/profile-picture`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    // Update local user data to remove profile picture
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    user.profile.profile_picture = null;
+    localStorage.setItem('user', JSON.stringify(user));
+    
+    checkProfileCompleteness();
+    alert('Profile picture removed successfully!');
+  } catch (error) {
+    console.error('Error removing profile picture:', error);
+    alert('Failed to remove profile picture.');
+  }
+};
+
+const openUserProfile = () => {
+  router.push('/user-profile');
+};
+
+const logoutToLogin = () => {
+  localStorage.removeItem('token');
+  router.push('/login');
+};
