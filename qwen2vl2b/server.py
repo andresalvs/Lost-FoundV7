@@ -204,7 +204,23 @@ def predict_qwen():
         image = resize_image_smart(raw_image, max_pixels)
 
         # Prepare prompt
-        prompt_text = "Describe this object in moderate detail enough to search it. Focus on the object in describing and not the background. Generate the result in JSON format with this details: item name, color, brand, and description."
+        prompt_text = """Analyze this image carefully and identify the MAIN OBJECT in focus.
+
+Step 1: First, list what you see.
+Step 2: Identify the PRIMARY/MAIN object.
+Step 3: Provide details about the main object.
+Step 4: Look for BRAND - logos, text, emblems, manufacturer marks.
+Step 5: Identify the PRIMARY COLOR with finish (matte, glossy).
+
+Item Name = WHAT TYPE + model/size. Brand = WHO MAKES IT.
+
+Generate JSON with:
+- item_name: Product name with model/size if visible and product type
+- color: Primary color with finish (matte black, glossy silver, etc.)
+- brand: Manufacturer. If unknown, write 'unbranded'
+- description: Details about the object only, ignore background
+
+Ensure EVERY field is filled - no empty values."""
         
         conversation = [
             {

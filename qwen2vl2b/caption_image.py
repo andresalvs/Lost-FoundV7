@@ -13,7 +13,23 @@ warnings.filterwarnings("ignore")
 LOCAL_MODEL_DIR = "./qwen2vl2b"
 # Allow passing an image path as the first CLI argument. Fall back to default.
 IMAGE_PATH = sys.argv[1] if len(sys.argv) > 1 else "images/lost_item.jpg"
-PROMPT_TEXT = "Describe this object in moderate detail enough to search it. Focus on the object in describing and not the background. Generate the result in JSON format with this details: item name, color, brand, and description."
+PROMPT_TEXT = """Analyze this image carefully and identify the MAIN OBJECT in focus.
+
+Step 1: First, list what you see.
+Step 2: Identify the PRIMARY/MAIN object.
+Step 3: Provide details about the main object.
+Step 4: Look for BRAND - logos, text, emblems, manufacturer marks.
+Step 5: Identify the PRIMARY COLOR with finish (matte, glossy).
+
+Item Name = WHAT TYPE + model/size. Brand = WHO MAKES IT.
+
+Generate JSON with:
+- item_name: Product name with model/size if visible and product type
+- color: Primary color with finish (matte black, glossy silver, etc.)
+- brand: Manufacturer. If unknown, write 'unbranded'
+- description: Details about the object only, ignore background
+
+Ensure EVERY field is filled - no empty values."""
 
 # --- Cross-Platform Helper Functions ---
 
