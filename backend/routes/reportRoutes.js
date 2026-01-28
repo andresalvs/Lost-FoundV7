@@ -4,6 +4,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { createMatchNotification } from "../services/notificationService.js";
+import { getEmbedding } from "../services/embeddingService.js";
 
 const router = express.Router();
 
@@ -199,6 +200,37 @@ router.post("/report", upload.single("photo"), async (req, res) => {
     );
 
     const newItem = result.rows[0];
+
+    // ✅ Auto-generate embedding for general found items
+    if (category === 'general' && type === 'found') {
+      try {
+        const textToEmbed = [
+          newItem.name,
+          newItem.brand,
+          newItem.color,
+          newItem.description
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+
+        if (textToEmbed) {
+          console.log(`⏳ Generating embedding for new found item: "${newItem.name}"...`);
+          const embedding = await getEmbedding(textToEmbed);
+          
+          // Update item with embedding
+          await pool.query(
+            `UPDATE items SET embedding = $1::vector WHERE id = $2`,
+            [JSON.stringify(embedding), newItem.id]
+          );
+          
+          console.log(`✅ Successfully auto-generated embedding for: "${newItem.name}" (ID: ${newItem.id})`);
+        }
+      } catch (embeddingErr) {
+        console.error(`❌ ERROR auto-generating embedding for item ${newItem.id}:`, embeddingErr.message);
+        // Don't fail the request - item was created successfully
+      }
+    }
 
     // ✅ Combine item + reporter info
     const reportData = {

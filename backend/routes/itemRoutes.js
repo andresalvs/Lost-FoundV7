@@ -1,5 +1,6 @@
 import express from "express";
 import pool from "../db.js";
+import { getEmbedding } from "../services/embeddingService.js";
 
 const router = express.Router();
 
@@ -81,59 +82,125 @@ router.get("/", async (req, res) => {
 
 /**
  * 🔍 SEARCH ROUTE — Find items in security custody (found items)
+ * Supports both vector semantic search and traditional student ID exact match
  * Examples:
- * - /api/items/search?itemName=Black%20Umbrella  (partial name match with fuzzy ranking on frontend)
+ * - /api/items/search?itemName=Black%20Umbrella  (pgvector semantic search)
  * - /api/items/search?studentId=221-01878       (exact student_id match)
- * Backwards-compatible: /api/items/search?query=wallet (partial match or id detection)
+ * - /api/items/search?query=wallet               (legacy: auto-detect type)
  */
 router.get("/search", async (req, res) => {
   const { query, itemName, studentId } = req.query;
 
   try {
-    let sql = `
-      SELECT i.*, 
-        u_reporter.full_name AS reporter_name, 
-        u_reporter.email AS reporter_email,
-        u_reporter.contact_number AS reporter_contact,
-        u_reporter.profile_picture AS reporter_profile_picture,
-        u_reporter.id AS reporter_user_id
-      FROM items i
-      LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
-      WHERE i.type = 'found'
-      AND i.status = 'in_security_custody'
-    `;
-    const params = [];
+    let result = null;
 
-    // Prefer explicit params: studentId or itemName
+    // CASE 1: Student ID - Exact match (no pgvector needed)
     if (studentId) {
-      // Exact match for student ID
-      params.push(studentId);
-      sql += ` AND i.student_id = $${params.length}`;
-    } else if (itemName) {
-      // Partial name match (LIKE) - frontend will do fuzzy ranking with Fuse.js
-      params.push(`%${itemName}%`);
-      sql += ` AND (LOWER(i.name) LIKE LOWER($${params.length}) OR LOWER(i.brand) LIKE LOWER($${params.length}) OR LOWER(i.color) LIKE LOWER($${params.length}))`;
-    } else if (query) {
-      // Legacy behavior: detect student ID format or do partial name match
-      const isStudentId = /^\d{3}-\d{5}$/.test(query);
-
+      console.log(`🔍 SEARCH: Student ID exact match - ${studentId}`);
+      
+      const sql = `
+        SELECT i.*, 
+          u_reporter.full_name AS reporter_name, 
+          u_reporter.email AS reporter_email,
+          u_reporter.contact_number AS reporter_contact,
+          u_reporter.profile_picture AS reporter_profile_picture,
+          u_reporter.id AS reporter_user_id
+        FROM items i
+        LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
+        WHERE i.type = 'found'
+        AND i.status = 'in_security_custody'
+        AND i.student_id = $1
+        ORDER BY i.created_at DESC
+      `;
+      
+      result = await pool.query(sql, [studentId]);
+    } 
+    // CASE 2: Item Name or Query - Vector semantic search
+    else if (itemName || query) {
+      const searchText = (itemName || query).trim();
+      
+      // Check if it looks like a student ID (legacy behavior)
+      const isStudentId = /^\d{3}-\d{5}$/.test(searchText);
+      
       if (isStudentId) {
-        params.push(query);
-        sql += ` AND i.student_id = $${params.length}`;
+        console.log(`🔍 SEARCH: Query detected as Student ID - ${searchText}`);
+        
+        const sql = `
+          SELECT i.*, 
+            u_reporter.full_name AS reporter_name, 
+            u_reporter.email AS reporter_email,
+            u_reporter.contact_number AS reporter_contact,
+            u_reporter.profile_picture AS reporter_profile_picture,
+            u_reporter.id AS reporter_user_id
+          FROM items i
+          LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
+          WHERE i.type = 'found'
+          AND i.status = 'in_security_custody'
+          AND i.student_id = $1
+          ORDER BY i.created_at DESC
+        `;
+        
+        result = await pool.query(sql, [searchText]);
       } else {
-        params.push(`%${query}%`);
-        sql += ` AND LOWER(i.name) LIKE LOWER($${params.length})`;
+        // Use pgvector for semantic search on item name/description
+        console.log(`🔍 SEARCH: Vector semantic search - "${searchText}"`);
+        
+        try {
+          // Generate embedding for search query
+          const searchEmbedding = await getEmbedding(searchText);
+          
+          const sql = `
+            SELECT i.*, 
+              u_reporter.full_name AS reporter_name, 
+              u_reporter.email AS reporter_email,
+              u_reporter.contact_number AS reporter_contact,
+              u_reporter.profile_picture AS reporter_profile_picture,
+              u_reporter.id AS reporter_user_id,
+              (1 - (i.embedding <=> $1::vector)) AS similarity_score
+            FROM items i
+            LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
+            WHERE i.type = 'found'
+            AND i.status = 'in_security_custody'
+            AND i.category = 'general'
+            AND i.embedding IS NOT NULL
+            AND (1 - (i.embedding <=> $1::vector)) > 0.5
+            ORDER BY i.embedding <=> $1::vector ASC
+            LIMIT 20
+          `;
+          
+          result = await pool.query(sql, [JSON.stringify(searchEmbedding)]);
+          console.log(`✅ Vector search found ${result.rows.length} results (similarity > 0.5)`);
+        } catch (embeddingError) {
+          console.warn('⚠️ Vector search failed, falling back to LIKE search:', embeddingError.message);
+          
+          // Fallback to LIKE search if embedding fails
+          const sql = `
+            SELECT i.*, 
+              u_reporter.full_name AS reporter_name, 
+              u_reporter.email AS reporter_email,
+              u_reporter.contact_number AS reporter_contact,
+              u_reporter.profile_picture AS reporter_profile_picture,
+              u_reporter.id AS reporter_user_id
+            FROM items i
+            LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
+            WHERE i.type = 'found'
+            AND i.status = 'in_security_custody'
+            AND i.category = 'general'
+            AND (LOWER(i.name) LIKE LOWER($1) 
+                 OR LOWER(i.brand) LIKE LOWER($1) 
+                 OR LOWER(i.color) LIKE LOWER($1))
+            ORDER BY i.created_at DESC
+            LIMIT 20
+          `;
+          
+          const searchPattern = `%${searchText}%`;
+          result = await pool.query(sql, [searchPattern]);
+        }
       }
+    } else {
+      // No search criteria provided
+      return res.json({ value: [], count: 0 });
     }
-
-    sql += ` ORDER BY i.created_at DESC`;
-    
-    console.log('🔍 SEARCH DEBUG:');
-    console.log(`  studentId=${studentId}, itemName=${itemName}, query=${query}`);
-    console.log(`  SQL: ${sql}`);
-    console.log(`  Params: ${JSON.stringify(params)}`);
-
-    const result = await pool.query(sql, params);
 
     // Normalize matching context coming from the caller.
     const rawSourceId =
@@ -476,7 +543,38 @@ router.post("/", async (req, res) => {
       ]
     );
 
-    res.status(201).json(result.rows[0]);
+    const newItem = result.rows[0];
+
+    // Auto-generate embedding for general items that are found
+    if (category === 'general' && type === 'found') {
+      try {
+        const textToEmbed = [name, brand, color, description]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+
+        if (textToEmbed) {
+          console.log(`⏳ Generating embedding for new item: "${name}"...`);
+          const embedding = await getEmbedding(textToEmbed);
+          
+          // Update item with embedding
+          await pool.query(
+            `UPDATE items SET embedding = $1::vector WHERE id = $2`,
+            [JSON.stringify(embedding), newItem.id]
+          );
+          
+          console.log(`✅ Successfully auto-generated embedding for: "${name}" (ID: ${newItem.id})`);
+        } else {
+          console.warn(`⚠️ No text to embed for item ${newItem.id}`);
+        }
+      } catch (embeddingErr) {
+        console.error(`❌ ERROR auto-generating embedding for item ${newItem.id}:`, embeddingErr.message);
+        console.error('Stack:', embeddingErr.stack);
+        // Don't fail the request - item was created successfully
+      }
+    }
+
+    res.status(201).json(newItem);
   } catch (err) {
     console.error("❌ Error adding item:", err);
     res.status(500).json({ error: "Failed to add item" });

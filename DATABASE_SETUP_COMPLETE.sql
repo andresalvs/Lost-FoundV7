@@ -234,8 +234,36 @@ ORDER BY table_name;
 SELECT day_of_week, opening_time, closing_time, is_open FROM office_hours ORDER BY day_of_week;
 
 -- ============================================================================
+-- PGVECTOR SETUP - SEMANTIC SEARCH FOR ITEMS
+-- ============================================================================
+-- These commands enable vector-based semantic search for general items
+-- Required for the pgvector-enhanced search functionality
+
+-- Create pgvector extension (enables vector data type)
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Add embedding column to items table for semantic search
+-- Stores 384-dimensional embeddings from all-MiniLM-L6-v2 model
+ALTER TABLE items ADD COLUMN IF NOT EXISTS embedding vector(384);
+
+-- Create index for faster vector similarity search using IVFFLAT
+-- This significantly speeds up semantic searches on large item lists
+CREATE INDEX IF NOT EXISTS items_embedding_idx 
+ON items USING ivfflat (embedding vector_cosine_ops) 
+WITH (lists = 100);
+
+-- Verify pgvector extension is installed
+SELECT * FROM pg_extension WHERE extname = 'vector';
+
+-- Verify embedding column was created
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'items' AND column_name = 'embedding';
+
+-- ============================================================================
 -- SETUP COMPLETE
 -- ============================================================================
 -- All database tables, indexes, and default data have been created.
+-- pgvector extension is now enabled for semantic item search.
 -- The database is now ready for the Lost and Found V5 application.
 -- ============================================================================
