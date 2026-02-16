@@ -18,7 +18,7 @@
 
     <!-- Role Change Confirmation Modal -->
     <transition name="fade">
-      <div v-if="isRoleChangeModalOpen" class="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-70">
+      <div v-if="isRoleChangeModalOpen" class="fixed inset-0 z-[110] flex items-center justify-center bg-black bg-opacity-70">
         <div class="bg-white dark:bg-gray-900 border border-emerald-500 rounded-2xl shadow-xl p-8 max-w-md w-full transition-colors duration-200">
           <div class="flex flex-col items-center space-y-4">
             <h2 class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">Confirm Role Change</h2>
@@ -401,13 +401,6 @@
             >
               Revert Role
             </button>
-            <button
-              v-if="selectedUser.role !== 'admin'"
-              @click="confirmUserDelete(selectedUser)"
-              class="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition font-semibold shadow-md"
-            >
-              Delete User
-            </button>
           </div>
 
           <!-- Close Button -->
@@ -596,7 +589,7 @@
                 <button
                   v-if="activeReportTab === 'Returned History' && filteredReturnedHistory.length > 0"
                   @click="openDownloadModal"
-                  :disabled="isDownloadingAll"
+                  :disabled="isDownloadingAll || isDownloadingExcel"
                   class="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-lg font-medium transition-colors shadow-md whitespace-nowrap"
                   :title="`Download all ${filteredReturnedHistory.length} returned items as PDF`"
                 >
@@ -982,7 +975,7 @@
                 </button>
                 <button
                   @click="executeDownloadByMonth"
-                  :disabled="selectedMonths.size === 0 || isDownloadingAll"
+                  :disabled="selectedMonths.size === 0 || isDownloadingAll || isDownloadingExcel"
                   class="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium transition-colors flex items-center gap-2"
                 >
                   <svg v-if="!isDownloadingAll" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
@@ -991,7 +984,21 @@
                   <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.995-1.039M9.687 16.464l3.181-3.183" />
                   </svg>
-                  {{ isDownloadingAll ? 'Generating...' : 'Download' }}
+                  {{ isDownloadingAll ? 'Generating...' : 'PDF' }}
+                </button>
+
+                <button
+                  @click="executeExcelDownload"
+                  :disabled="selectedMonths.size === 0 || isDownloadingAll || isDownloadingExcel"
+                  class="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium transition-colors flex items-center gap-2"
+                >
+                  <svg v-if="!isDownloadingExcel" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 10.5L12 15m0 0l4.5-4.5M12 15V3" />
+                  </svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.995-1.039M9.687 16.464l3.181-3.183" />
+                  </svg>
+                  {{ isDownloadingExcel ? 'Generating...' : 'Excel' }}
                 </button>
               </div>
             </div>
@@ -1125,16 +1132,6 @@
                             class="hidden md:inline-block px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 transition text-s font-medium whitespace-nowrap"
                           >
                             Revert Role
-                          </button>
-                          <button
-                            v-if="user.role !== 'admin'"
-                            @click="confirmUserDelete(user)"
-                            class="hidden md:inline-block p-1 bg-red-500 text-white rounded hover:bg-red-600 transition"
-                            title="Delete user"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                              <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                            </svg>
                           </button>
                         </div>
                       </td>
@@ -1289,6 +1286,161 @@
           <div v-if="activePage === 'office-hours'">
             <EditableOfficeHours />
           </div>
+
+          <!-- SETTINGS SECTION -->
+          <div v-if="activePage === 'settings'">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6 text-center">Settings</h1>
+            
+            <div class="max-w-2xl mx-auto">
+              <!-- Data Retention Card -->
+              <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg mb-6 relative z-10">
+                <div class="flex items-center gap-3 mb-6">
+                  <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </div>
+                  <h3 class="text-xl font-bold text-gray-900 dark:text-white">Data Retention</h3>
+                </div>
+
+                <div class="space-y-6">
+                  <!-- Automatic Deletion Toggle -->
+                  <div 
+                    @click="settingsStore.toggleRetentionEnabled()"
+                    class="flex items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div class="flex-1 text-left">
+                      <h4 class="font-bold text-gray-900 dark:text-white">Auto-Delete Returned Reports</h4>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Automatically remove reports from history after they have been returned for the period set below.</p>
+                    </div>
+                    <button 
+                      type="button"
+                      :class="[
+                        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 cursor-pointer',
+                        settingsStore.retentionEnabled ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                      ]"
+                    >
+                      <span 
+                        :class="[
+                          'inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200',
+                          settingsStore.retentionEnabled ? 'translate-x-6' : 'translate-x-1'
+                        ]"
+                      />
+                    </button>
+                  </div>
+
+                  <!-- Retention Period Control -->
+                  <div class="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 space-y-4">
+                    <div class="flex items-center justify-between gap-4">
+                      <div class="flex-1 text-left">
+                        <h4 class="font-bold text-gray-900 dark:text-white">Retention Duration</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Number of months to keep records in the returned history.</p>
+                      </div>
+                      <div class="flex items-center gap-2" v-if="!settingsStore.isTestMode">
+                        <input 
+                          type="number" 
+                          min="1" 
+                          max="120"
+                          :value="settingsStore.retentionMonths"
+                          @input="settingsStore.setRetentionMonths($event.target.value)"
+                          class="w-20 p-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-center font-bold text-emerald-600 dark:text-emerald-400 focus:ring-2 focus:ring-emerald-500 outline-none"
+                        />
+                        <span class="text-sm font-semibold text-gray-600 dark:text-gray-400">Months</span>
+                      </div>
+                      <div v-else class="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg font-bold text-sm">
+                        2 Minutes (Test Mode)
+                      </div>
+                    </div>
+
+                    <div 
+                      class="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700 cursor-pointer"
+                      @click="settingsStore.toggleTestMode()"
+                    >
+                      <input 
+                        type="checkbox" 
+                        id="testMode"
+                        :checked="settingsStore.isTestMode"
+                        readonly
+                        class="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 cursor-pointer pointer-events-none"
+                      />
+                      <label for="testMode" class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider cursor-pointer">
+                        Enable 2-Minute Test Mode
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Privacy Settings Card -->
+              <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-lg relative z-10">
+                <div class="flex items-center gap-3 mb-6">
+                  <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <h3 class="text-xl font-bold text-gray-900 dark:text-white">Privacy Controls</h3>
+                </div>
+
+                <div class="space-y-6">
+                  <!-- Global Search Blur -->
+                  <div 
+                    @click="settingsStore.togglePrivacyBlur()"
+                    class="flex items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div class="flex-1 text-left">
+                      <h4 class="font-bold text-gray-900 dark:text-white">Search Page Image Privacy Blur</h4>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Blur item images in search results and claim modals for all users.</p>
+                    </div>
+                    <button 
+                      type="button"
+                      :class="[
+                        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 cursor-pointer',
+                        settingsStore.privacyBlur ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                      ]"
+                    >
+                      <span 
+                        :class="[
+                          'inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200',
+                          settingsStore.privacyBlur ? 'translate-x-6' : 'translate-x-1'
+                        ]"
+                      />
+                    </button>
+                  </div>
+
+                  <!-- Match Results Blur -->
+                  <div 
+                    @click="settingsStore.toggleMatchResultsBlur()"
+                    class="flex items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div class="flex-1 text-left">
+                      <h4 class="font-bold text-gray-900 dark:text-white">Match Results Privacy Blur</h4>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Blur images specifically when a user views their Match Result details.</p>
+                    </div>
+                    <button 
+                      type="button"
+                      :class="[
+                        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 cursor-pointer',
+                        settingsStore.matchResultsBlur ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                      ]"
+                    >
+                      <span 
+                        :class="[
+                          'inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200',
+                          settingsStore.matchResultsBlur ? 'translate-x-6' : 'translate-x-1'
+                        ]"
+                      />
+                    </button>
+                  </div>
+                  
+                  <div class="flex items-start gap-3 text-sm text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
+                    <span class="text-lg">💡</span>
+                    <p>When <strong>ON</strong>, all university viewers will see blurred images. This helps protect identity and sensitive information on IDs or lost items.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </main>
       </div>
     </div>
@@ -1296,22 +1448,17 @@
 </template>
 
 <script setup>
-</script>
-
-<style scoped>
-</style>
-
-
-<script setup>
 /* eslint-disable no-unused-vars */
 import { ref, reactive, computed, onMounted, watch, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import axios from "axios";
+import * as XLSX from "xlsx";
 import initSocket from "../socket";
 import AdminSidebar from '../components/AdminSidebar.vue';
 import AdminNavbar from '../components/AdminNavbar.vue';
 import DashboardCard from '../components/DashboardCard.vue';
 import EditableOfficeHours from '../components/EditableOfficeHours.vue';
+import { settingsStore } from '../stores/settings';
 
 const API_BASE_URL = "http://localhost:5000";
 const router = useRouter();
@@ -1339,6 +1486,7 @@ const emailChangedTimer = ref(null);
 const showDownloadModal = ref(false);
 const selectedMonths = ref(new Set()); // Track selected month keys (e.g., '2026-01', '2025-12')
 const isDownloadingAll = ref(false);
+const isDownloadingExcel = ref(false);
 const showDownloadComplete = ref(false);
 
 // Logout helper function
@@ -1467,9 +1615,12 @@ const fetchItems = async () => {
       const item = { ...record, imageError: false, reporterImageError: false, claimantImageError: false };
       const removed = await maybeAutoDeleteReturnedLost(item);
       if (removed) continue;
-      if (item.type === "lost") nextLost.push(item);
+      // Treat 'marked_returned' (lost items marked returned by staff) as returned
+      if (item.type === "lost" && item.status !== "marked_returned") nextLost.push(item);
       if (item.type === "found" && item.status !== "returned") nextFound.push(item);
-      if (item.status === "returned") {
+      // Include all claimed/returned statuses in returned history (both lost and found items)
+      const claimedStatuses = ["returned", "claimed", "confirmed_claim", "delivered", "marked_returned"];
+      if (claimedStatuses.includes(item.status)) {
         // Normalize return_date for returned items so UI shows a timestamp instead of N/A
         if (!item.return_date) {
           item.return_date = item.return_date || item.returnDate || item.updated_at || item.datetime || item.created_at || null;
@@ -1681,8 +1832,16 @@ const confirmRoleChange = async () => {
     alert(`${user.full_name || user.email} has been updated to ${roleName}.`);
     targetRole.value = '';
   } catch (error) {
-    console.error("Error changing user role:", error);
-    // ... error handling (kept as-is)
+    if (error.response?.status === 401) {
+      alert("Your session has expired. Please log in again.");
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    } else if (error.response?.status === 403) {
+      alert("You don't have permission to change user roles. Admin access required.");
+    } else {
+      alert("Failed to change user role. Please try again.");
+    }
   }
 };
 
@@ -1908,7 +2067,7 @@ const availableMonthData = computed(() => {
   const monthMap = new Map(); // key: 'YYYY-MM', value: count
   
   // Count reports by month based on return_date
-  for (const item of returnedHistory.value) {
+  for (const item of filteredReturnedHistory.value) {
     const returnDate = item.return_date ? new Date(item.return_date) : null;
     if (returnDate && !isNaN(returnDate.getTime())) {
       const year = returnDate.getFullYear();
@@ -1918,7 +2077,7 @@ const availableMonthData = computed(() => {
     }
   }
 
-  const allTimeCount = returnedHistory.value.length;
+  const allTimeCount = filteredReturnedHistory.value.length;
   
   // Current date
   const now = new Date();
@@ -2054,8 +2213,10 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
     }
   } catch (e) { /* ignore */ }
 
-  const universityName = 'Caraga State University';
-  const officeName = 'Security Office';
+  const universityName = 'CARAGA STATE UNIVERSITY';
+  const officeName = 'OFFICE OF THE CAMPUS SAFETY AND SECURITY';
+  const reportLine3 = 'ACKNOWLEDGEMENT RECEIPT';
+  const reportLine4 = 'OF LOST AND FOUND ITEMS';
   const reportDate = new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
 
   const itemDescParts = [];
@@ -2072,6 +2233,21 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
   const claimantName = item.claimant_name || item.transaction_claimant_name || item.reporter_name || 'N/A';
   const claimantEmail = item.claimant_email || item.transaction_claimant_email || 'N/A';
   const claimantPhone = item.claimant_contact || item.claimant_phone || item.transaction_claimant_contact || item.transaction_claimant_phone || item.reporter_contact || item.reporter_phone || 'N/A';
+  const claimantStudentId = (item.user_claim_status === 'confirmed_claim' && item.transaction_claimant_student_id)
+    ? item.transaction_claimant_student_id
+    : (item.claimant_student_id || item.transaction_claimant_student_id || item.student_id || item.studentId || 'N/A');
+
+  const reporterName = item.reporter_name || item.reporter?.full_name || 'N/A';
+  const reporterEmail = item.reporter_email || item.reporter?.email || 'N/A';
+  let reporterStudentId = item.reporter_student_id || item.reporter?.id_number || item.reporter?.student_id || 'N/A';
+  const reporterPhone = item.reporter_contact || item.reporter?.contact_number || 'N/A';
+
+  if ((reporterStudentId === 'N/A' || !reporterStudentId) && item.reporter_user_id) {
+    try {
+      const profileResp = await axios.get(`${API_BASE_URL}/api/profile/${encodeURIComponent(item.reporter_user_id)}`);
+      if (profileResp?.data?.id_number) reporterStudentId = profileResp.data.id_number;
+    } catch (e) { /* ignore */ }
+  }
 
   const verificationDate = returnDate;
   const verificationOfficer = currentUser.value?.full_name || 'Administrator';
@@ -2133,7 +2309,8 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
     // Claimant/reporter-specific candidates used only for claimant area
     const claimantImageCandidates = [
       item.claimant_profile_picture, item.transaction_claimant_profile_picture, item.transaction_claimant_picture,
-      item.reporter_profile_picture, (item.reporter && item.reporter.profile_picture)
+      (item.type === 'found' && item.claimant_name) ? null : item.reporter_profile_picture,
+      (item.type === 'found' && item.claimant_name) ? null : (item.reporter && item.reporter.profile_picture)
     ];
     const itemImageData = await loadImageAsDataURL(itemImageCandidates);
     const claimantImageData = await loadImageAsDataURL(claimantImageCandidates);
@@ -2156,8 +2333,18 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
     } catch (e) { /* ignore console errors */ }
 
     let y = 14;
+    // Header: three lines (university, office, report title)
     doc.setFontSize(16);
-    doc.text(`${universityName} - ${officeName}`, 14, y);
+    doc.text(universityName, 14, y);
+    y += 8;
+    doc.setFontSize(14);
+    doc.text(officeName, 14, y);
+    y += 8;
+    doc.setFontSize(12);
+    doc.text(reportLine3, 14, y);
+    y += 7;
+    doc.setFontSize(12);
+    doc.text(reportLine4, 14, y);
     // place item image on the right if available (detect mime); otherwise draw placeholder box
     if (itemImageData) {
       try {
@@ -2173,10 +2360,10 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
         doc.text('No image', 170, 28, { align: 'center' });
       } catch (e) { /* ignore placeholder draw errors */ }
     }
+    // Reset to black so subsequent text is not greyed out
+    try { doc.setTextColor(0, 0, 0); } catch (e) { /* ignore */ }
     y += 8;
-    doc.setFontSize(14);
-    doc.text('Lost and Found Item Return Report', 14, y);
-    y += 10;
+    // removed redundant subtitle; header lines above are used instead
     doc.setFontSize(10);
     doc.text(`Date of Report: ${reportDate}`, 14, y);
 
@@ -2237,7 +2424,7 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
     if (isId) {
       rows = [
         ['Student Name', item.student_name || item.reporter_name || item.reporter?.full_name || item.user_name || item.display_name || item.name || 'N/A'],
-        ['Student ID', item.student_id || item.item_student_id || item.studentId || item.display_student_id || item.display_student || 'N/A'],
+        ['Student ID', claimantStudentId],
         ['Department', item.department || item.student_department || item.reporter_department || item.claimant_department || 'N/A'],
         ['Course/Program', item.course || item.program || item.course_program || item.student_program || 'N/A'],
         ['Found Location', foundLocation],
@@ -2296,8 +2483,12 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
         doc.text('No image', 150 + 18, y + 12, { align: 'center' });
       } catch (e) { /* ignore */ }
     }
+    // Ensure text color and font size are reset so claimant info text is consistent
+    try { doc.setTextColor(0, 0, 0); doc.setFontSize(10); } catch (e) { /* ignore */ }
     y += 6;
     doc.text(`Email: ${claimantEmail}`, 14, y);
+    y += 6;
+    doc.text(`Student ID: ${claimantStudentId}`, 14, y);
     y += 6;
     doc.text(`Phone: ${claimantPhone}`, 14, y);
     y += 10;
@@ -2311,6 +2502,20 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
     doc.text(`Verification Officer: ${verificationOfficer}`, 14, y);
     y += 6;
     doc.text(`Return Method: ${returnMethod}`, 14, y);
+    y += 10;
+
+    // Reporter Information (no profile picture)
+    doc.setFontSize(12);
+    doc.text('Reporter Information', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`Name: ${reporterName}`, 14, y);
+    y += 6;
+    doc.text(`Email: ${reporterEmail}`, 14, y);
+    y += 6;
+    doc.text(`Student ID: ${reporterStudentId}`, 14, y);
+    y += 6;
+    doc.text(`Phone: ${reporterPhone}`, 14, y);
     y += 10;
 
     doc.text('Report Prepared By:', 14, y);
@@ -2371,7 +2576,7 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
       <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111} h1,h2{color:#222}</style>
       </head><body>
       <h1>${universityName} - ${officeName}</h1>
-      <h2>Lost and Found Item Return Report</h2>
+      <!-- subtitle removed to match SecurityDashboard header -->
       <p><strong>Date of Report:</strong> ${reportDate}</p>
       <h3>${isIdHtml ? 'ID Return Details' : 'Item Return Details'}</h3>
       ${itemImgUrl ? `<p><img src="${itemImgUrl}" style="max-width:220px;border:1px solid #ddd;padding:6px;margin:6px 0;"/></p>` : `<div style="width:220px;height:140px;border:1px solid #ddd;padding:6px;margin:6px 0;display:flex;align-items:center;justify-content:center;color:#888;background:#fafafa">No image</div>`}
@@ -2392,12 +2597,19 @@ const generateReturnReport = async (item, { download = true, forceType = null } 
       <h3>Claimant Information</h3>
       <p><strong>Name:</strong> ${claimantName}</p>
       <p><strong>Email:</strong> ${claimantEmail}</p>
+      <p><strong>Student ID:</strong> ${claimantStudentId}</p>
       <p><strong>Phone:</strong> ${claimantPhone}</p>
       <h3>Verification and Return Process</h3>
       <p><strong>Claim Verification Date:</strong> ${formatDate(verificationDate)}</p>
       <p><strong>Verification Officer:</strong> ${verificationOfficer}</p>
       <p><strong>Return Method:</strong> ${returnMethod}</p>
       
+      <h3>Reporter Information</h3>
+      <p><strong>Name:</strong> ${reporterName}</p>
+      <p><strong>Email:</strong> ${reporterEmail}</p>
+      <p><strong>Student ID:</strong> ${reporterStudentId}</p>
+      <p><strong>Phone:</strong> ${reporterPhone}</p>
+
       <h3>Report Prepared By:</h3>
       <p>${verificationOfficer}<br/>${currentUser.value?.email || 'admin@carsu.edu.ph'}</p>
       <script>${printScript}</" + "script>
@@ -2477,11 +2689,11 @@ const executeDownloadByMonth = async () => {
     let itemsToDownload = [];
     
     if (selectedMonths.value.has('all-time')) {
-      // Download all returned items
-      itemsToDownload = returnedHistory.value;
+      // Download all filtered items
+      itemsToDownload = filteredReturnedHistory.value;
     } else {
       // Filter items by selected months
-      itemsToDownload = returnedHistory.value.filter(item => {
+      itemsToDownload = filteredReturnedHistory.value.filter(item => {
         const returnDate = item.return_date ? new Date(item.return_date) : null;
         if (!returnDate || isNaN(returnDate.getTime())) return false;
         
@@ -2510,7 +2722,148 @@ const executeDownloadByMonth = async () => {
   }
 };
 
+// Excel Download Function
+const executeExcelDownload = async () => {
+  if (selectedMonths.value.size === 0 || isDownloadingExcel.value) return;
+  
+  isDownloadingExcel.value = true;
+  try {
+    let itemsToDownload = [];
+    
+    if (selectedMonths.value.has('all-time')) {
+      itemsToDownload = filteredReturnedHistory.value;
+    } else {
+      itemsToDownload = filteredReturnedHistory.value.filter(item => {
+        const returnDate = item.return_date ? new Date(item.return_date) : null;
+        if (!returnDate || isNaN(returnDate.getTime())) return false;
+        
+        const year = returnDate.getFullYear();
+        const month = String(returnDate.getMonth() + 1).padStart(2, '0');
+        const itemMonthKey = `${year}-${month}`;
+        
+        return selectedMonths.value.has(itemMonthKey);
+      });
+    }
+    
+    if (!itemsToDownload || itemsToDownload.length === 0) {
+      alert('No reports to download for the selected period.');
+      return;
+    }
+
+    // Helper to format date
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'N/A';
+      try {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch (e) { return 'N/A'; }
+    };
+
+    // Separate and map data
+    const idData = [];
+    const itemData = [];
+
+    // Use a for-loop for async/await fetching of profile data
+    for (let i = 0; i < itemsToDownload.length; i++) {
+      let item = itemsToDownload[i];
+      
+      // Fetch fresh data and ensure claimant info for accurate Student IDs
+      try {
+        const id = item.id || item.item_id || item._id || item.itemId;
+        if (id && !String(id).startsWith('txn-')) {
+          const res = await axios.get(`${API_BASE_URL}/api/items/${encodeURIComponent(id)}`);
+          if (res && res.data) {
+            item = Object.assign({}, item, res.data);
+          }
+        }
+      } catch (e) { /* fallback to existing item data */ }
+      
+      await ensureClaimantForItem(item).catch(() => {});
+
+      const isId = (item.category === 'id' || item.is_id || item.student_id);
+      
+      // Compute the claimant student ID based on user requirement
+      // Support multiple naming conventions from different stages of the data pipeline
+      const finalClaimantStudentId = item.claimant_student_id || item.claimantStudentId || item.claimant_profile_id_number || item.transaction_claimant_student_id || 'N/A';
+      const finalContactNumber = item.claimant_phone_number || item.claimantPhoneNumber || item.claimant_contact || item.transaction_claimant_contact || 'N/A';
+      const finalClaimantName = item.claimant_name || item.claimantName || item.transaction_claimant_name || item.reporter_name || 'N/A';
+
+      if (isId) {
+        idData.push({
+          'Student Name': item.name || 'N/A',
+          'Student ID #': item.student_id || 'N/A',
+          'Department': item.department || 'N/A',
+          'Course/Program': item.course || 'N/A',
+          'Status': item.status || 'Returned',
+          'Claimant Name': finalClaimantName,
+          'Claimant Student ID #': finalClaimantStudentId,
+          'Contact Number': finalContactNumber,
+          'Return Date': formatDate(item.return_date)
+        });
+      } else {
+        itemData.push({
+          'Item Name': item.name || 'N/A',
+          'Brand': item.brand || 'N/A',
+          'Color': item.color || 'N/A',
+          'Description': item.description || 'N/A',
+          'Status': item.status || 'Returned',
+          'Claimant Name': finalClaimantName,
+          'Claimant Student ID #': finalClaimantStudentId,
+          'Contact Number': finalContactNumber,
+          'Return Date': formatDate(item.return_date)
+        });
+      }
+    }
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+
+    // Add ID Sheet if data exists
+    if (idData.length > 0) {
+      const idWorksheet = XLSX.utils.json_to_sheet(idData);
+      // Auto-size columns
+      const id_max_width = idData.reduce((w, r) => Math.max(w, ...Object.values(r).map(v => String(v).length)), 15);
+      idWorksheet['!cols'] = Object.keys(idData[0]).map(() => ({ wch: id_max_width + 2 }));
+      XLSX.utils.book_append_sheet(workbook, idWorksheet, "Returned IDs");
+    }
+
+    // Add Item Sheet if data exists
+    if (itemData.length > 0) {
+      const itemWorksheet = XLSX.utils.json_to_sheet(itemData);
+      // Auto-size columns
+      const item_max_width = itemData.reduce((w, r) => Math.max(w, ...Object.values(r).map(v => String(v).length)), 15);
+      itemWorksheet['!cols'] = Object.keys(itemData[0]).map(() => ({ wch: item_max_width + 2 }));
+      XLSX.utils.book_append_sheet(workbook, itemWorksheet, "Returned Items");
+    }
+
+    // If both are empty (shouldn't happen due to check above), add a placeholder
+    if (idData.length === 0 && itemData.length === 0) {
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([{ Message: 'No data' }]), "Empty");
+    }
+
+    // Export file
+    const fileName = `Returned_Reports_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+
+    // Show completion message
+    showDownloadComplete.value = true;
+    
+    // Auto-close modal after 2 seconds
+    setTimeout(() => {
+      showDownloadModal.value = false;
+      showDownloadComplete.value = false;
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Excel Export Error:', error);
+    alert('Failed to generate Excel file.');
+  } finally {
+    isDownloadingExcel.value = false;
+  }
+};
+
 // Download all returned history items as a single combined PDF
+// Download all returned history items as a single combined PDF (respects current filters)
 const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
   if (!itemsToDownload || itemsToDownload.length === 0) {
     alert('No reports to download for the selected period.');
@@ -2532,8 +2885,26 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
     let isFirstPage = true;
 
     for (let i = 0; i < totalItems; i++) {
-      const item = itemsToDownload[i];
+      let item = itemsToDownload[i];
       try {
+        // Try to fetch freshest item data from backend
+        try {
+          const id = item.id || item.item_id || item._id || item.itemId;
+          if (id) {
+            const sid = String(id || '');
+            const looksLikeNumeric = /^[0-9]+$/.test(sid);
+            const looksLikeUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(sid);
+            if (!sid.startsWith('txn-') && (looksLikeNumeric || looksLikeUUID)) {
+              try {
+                const res = await axios.get(`${API_BASE_URL}/api/items/${encodeURIComponent(id)}`);
+                if (res && res.data) {
+                  item = Object.assign({}, item, res.data);
+                }
+              } catch (e) { /* ignore fetch errors */ }
+            }
+          }
+        } catch (e) { /* ignore fetch prep errors */ }
+
         // Ensure claimant data
         await ensureClaimantForItem(item).catch(() => {});
 
@@ -2544,8 +2915,10 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
         isFirstPage = false;
 
         // Generate report content for this item
-        const universityName = 'Caraga State University';
-        const officeName = 'Security Office';
+        const universityName = 'CARAGA STATE UNIVERSITY';
+        const officeName = 'OFFICE OF THE CAMPUS SAFETY AND SECURITY';
+        const reportLine3 = 'ACKNOWLEDGEMENT RECEIPT';
+        const reportLine4 = 'OF LOST AND FOUND ITEMS';
         const reportDate = new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
 
         const itemDescParts = [];
@@ -2556,93 +2929,76 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
         const itemDescription = itemDescParts.length ? itemDescParts.join(', ') : (item.name || 'N/A');
 
         const foundLocation = item.location || item.found_location || 'N/A';
-        const returnDate = item.return_date || new Date().toISOString();
+        const returnDate = item.returned_at || item.return_date || new Date().toISOString();
         const claimantName = item.claimant_name || item.transaction_claimant_name || item.reporter_name || 'N/A';
         const claimantEmail = item.claimant_email || item.transaction_claimant_email || 'N/A';
-        const claimantPhone = item.claimant_contact || item.transaction_claimant_contact || 'N/A';
-        const verificationDate = returnDate;
+        const claimantStudentId = (item.user_claim_status === 'confirmed_claim' && item.transaction_claimant_student_id)
+          ? item.transaction_claimant_student_id
+          : (item.claimant_student_id || item.transaction_claimant_student_id || item.student_id || item.studentId || 'N/A');
+        const claimantPhone = item.claimant_phone_number || item.claimant_contact || item.transaction_claimant_contact || 'N/A';
+        
+        const reporterName = item.reporter_name || item.reporter?.full_name || 'N/A';
+        const reporterEmail = item.reporter_email || item.reporter?.email || 'N/A';
+        let reporterStudentId = item.reporter_student_id || item.reporter?.id_number || item.reporter?.student_id || 'N/A';
+        const reporterPhone = item.reporter_contact || item.reporter?.contact_number || 'N/A';
+
+        if ((reporterStudentId === 'N/A' || !reporterStudentId) && item.reporter_user_id) {
+          try {
+            const profileResp = await axios.get(`${API_BASE_URL}/api/profile/${encodeURIComponent(item.reporter_user_id)}`);
+            if (profileResp?.data?.id_number) reporterStudentId = profileResp.data.id_number;
+          } catch (e) { /* ignore */ }
+        }
+
+        const verificationDate = item.returned_at || returnDate;
         const verificationOfficer = currentUser.value?.full_name || 'Administrator';
         const returnMethod = item.return_method || 'In-person pickup';
 
         let y = 14;
         mergedDoc.setFontSize(16);
-        mergedDoc.text(`${universityName} - ${officeName}`, 14, y);
+        mergedDoc.text(universityName, 14, y);
+        y += 8;
+        mergedDoc.setFontSize(14);
+        mergedDoc.text(officeName, 14, y);
+        y += 8;
+        mergedDoc.setFontSize(12);
+        mergedDoc.text(reportLine3, 14, y);
+        y += 7;
+        mergedDoc.setFontSize(12);
+        mergedDoc.text(reportLine4, 14, y);
         
-        // Load and embed images (item image on right)
+        // Load images
         const loadImageAsDataURL = async (candidates) => {
           if (!candidates) return null;
           const list = Array.isArray(candidates) ? candidates : [candidates];
-          const tryPrefixes = [ API_BASE_URL, (process.env.VUE_APP_API_URL || '') ];
           for (const u of list) {
             if (!u) continue;
-            const attempts = [];
             try {
               const full = getFullUrl(u) || u;
-              attempts.push(full);
-              tryPrefixes.forEach(p => {
-                try {
-                  if (p && !String(full).startsWith('http')) {
-                    const merged = p.replace(/\/$/, '') + '/' + String(u).replace(/^\//, '');
-                    attempts.push(merged);
-                  }
-                } catch (e) { /* ignore */ }
+              const resp = await fetch(full);
+              if (!resp.ok) continue;
+              const blob = await resp.blob();
+              return await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
               });
-              for (const fullAttempt of attempts) {
-                try {
-                  const resp = await fetch(fullAttempt);
-                  if (!resp.ok) continue;
-                  const blob = await resp.blob();
-                  const dataUrl = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                  });
-                  if (dataUrl) return dataUrl;
-                } catch (e) {
-                  continue;
-                }
-              }
-            } catch (e) {
-              continue;
-            }
+            } catch (e) { continue; }
           }
           return null;
         };
 
-        const itemImageCandidates = [
-          item.image_url, item.image, item.photo, item.imagePath, item.image_path,
-          item.item_image, item.item_photo, item.display_image, item.displayImage,
-          item.item_image_url, item.item_image_path
-        ];
-        const claimantImageCandidates = [
-          item.claimant_profile_picture, item.transaction_claimant_profile_picture, item.transaction_claimant_picture,
-          item.reporter_profile_picture, (item.reporter && item.reporter.profile_picture)
-        ];
-        
-        const itemImageData = await loadImageAsDataURL(itemImageCandidates);
-        const claimantImageData = await loadImageAsDataURL(claimantImageCandidates);
+        const itemImageData = await loadImageAsDataURL([item.image_url, item.image, item.photo]);
+        const claimantImageData = await loadImageAsDataURL([item.claimant_profile_picture, item.transaction_claimant_profile_picture]);
 
-        // Place item image on the right
         if (itemImageData) {
           try {
             const fmt = itemImageData.startsWith('data:image/png') ? 'PNG' : 'JPEG';
             mergedDoc.addImage(itemImageData, fmt, 150, 8, 40, 40);
-          } catch (e) { /* ignore image embed errors */ }
-        } else {
-          try {
-            mergedDoc.setDrawColor(200);
-            mergedDoc.rect(150, 8, 40, 40);
-            mergedDoc.setFontSize(8);
-            mergedDoc.setTextColor(120);
-            mergedDoc.text('No image', 170, 28, { align: 'center' });
-          } catch (e) { /* ignore placeholder draw errors */ }
+          } catch (e) { /* ignore */ }
         }
-        
-        y += 8;
-        mergedDoc.setFontSize(14);
-        mergedDoc.text('Lost and Found Item Return Report', 14, y);
-        y += 10;
+
+        y += 18;
         mergedDoc.setFontSize(10);
         mergedDoc.text(`Date of Report: ${reportDate}`, 14, y);
         y += 8;
@@ -2651,47 +3007,32 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
         y += 10;
 
         // Detect if ID or item
-        const isId = (() => {
-          try {
-            const name = (item.name || item.display_name || item.item_name || '').toString().toLowerCase();
-            const sid = (item.student_id || item.item_student_id || item.studentId || '').toString().toLowerCase();
-            if (item.is_id || item.is_student_id || item.isStudentId) return true;
-            const claimantNames = [item.claimant_name, item.transaction_claimant_name, item.reporter_name, item.display_name, item.reporter?.full_name].filter(Boolean).map(s => String(s).trim().toLowerCase());
-            if (item.name && claimantNames.includes(String(item.name).trim().toLowerCase())) return true;
-            const looksLikePerson = item.name && /\w+\s+\w+/.test(String(item.name));
-            const hasItemProperties = item.brand || item.color || item.description;
-            if (looksLikePerson && !hasItemProperties && (item.claimant_name || item.transaction_claimant_name || item.reporter_name)) return true;
-            if (sid) return true;
-            if (name.includes('student id') || name.includes('(id)') || name.includes(' id')) return true;
-          } catch (e) { 
-            // Ignore parsing errors
-          }
+        const isIdItem = (() => {
+          const name = (item.name || '').toLowerCase();
+          if (item.is_id || name.includes(' id') || name.includes('student id')) return true;
           return false;
         })();
 
-        // Build table rows
         let rows = [];
-        if (isId) {
+        if (isIdItem) {
           rows = [
-            ['Student Name', item.student_name || item.reporter_name || item.reporter?.full_name || item.display_name || item.name || 'N/A'],
-            ['Student ID', item.student_id || item.item_student_id || item.studentId || item.display_student_id || 'N/A'],
-            ['Department', item.department || item.student_department || item.reporter_department || 'N/A'],
-            ['Course/Program', item.course || item.program || item.student_program || 'N/A'],
+            ['Student Name', item.student_name || item.name || 'N/A'],
+            ['Student ID', claimantStudentId],
+            ['Department', item.department || 'N/A'],
             ['Found Location', foundLocation],
             ['Return Date', formatDate(returnDate)]
           ];
         } else {
           rows = [
-            ['Item Name', item.name || item.item_name || item.display_name || 'N/A'],
-            ['Brand', item.brand || item.item_brand || 'N/A'],
-            ['Color', item.color || item.item_color || 'N/A'],
-            ['Description', item.description || item.notes || itemDescription || 'N/A'],
+            ['Item Name', item.name || 'N/A'],
+            ['Brand', item.brand || 'N/A'],
+            ['Color', item.color || 'N/A'],
+            ['Description', itemDescription],
             ['Found Location', foundLocation],
             ['Return Date', formatDate(returnDate)]
           ];
         }
 
-        // Use autoTable if available
         if (typeof mergedDoc.autoTable === 'function') {
           mergedDoc.autoTable({
             startY: y,
@@ -2700,71 +3041,64 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
             styles: { fontSize: 9 },
             headStyles: { fillColor: [41, 128, 185], textColor: 255 }
           });
-          y = mergedDoc.lastAutoTable ? mergedDoc.lastAutoTable.finalY + 8 : y + (rows.length * 6) + 8;
-        } else {
-          mergedDoc.setFontSize(11);
-          mergedDoc.text(isId ? 'ID Return Details' : 'Item Return Details', 14, y);
-          y += 8;
-          mergedDoc.setFontSize(9);
-          rows.forEach(([k, v]) => {
-            mergedDoc.text(`${k}: ${v}`, 14, y);
-            y += 6;
-            if (y > 270) { mergedDoc.addPage(); y = 14; }
-          });
+          y = mergedDoc.lastAutoTable ? mergedDoc.lastAutoTable.finalY + 8 : y + 40;
         }
 
         y += 8;
-        mergedDoc.setFontSize(11);
+        mergedDoc.setFontSize(12);
         mergedDoc.text('Claimant Information', 14, y);
         y += 8;
-        mergedDoc.setFontSize(9);
+        mergedDoc.setFontSize(10);
         mergedDoc.text(`Name: ${claimantName}`, 14, y);
         
-        // Place claimant image on the right
         if (claimantImageData) {
           try {
             const fmtC = claimantImageData.startsWith('data:image/png') ? 'PNG' : 'JPEG';
             mergedDoc.addImage(claimantImageData, fmtC, 150, y - 6, 36, 36);
-          } catch (e) { /* ignore */ }
-        } else {
-          try {
-            mergedDoc.setDrawColor(200);
-            mergedDoc.rect(150, y - 6, 36, 36);
-            mergedDoc.setFontSize(7);
-            mergedDoc.setTextColor(120);
-            mergedDoc.text('No image', 150 + 18, y + 12, { align: 'center' });
           } catch (e) { /* ignore */ }
         }
         
         y += 6;
         mergedDoc.text(`Email: ${claimantEmail}`, 14, y);
         y += 6;
+        mergedDoc.text(`Student ID: ${claimantStudentId}`, 14, y);
+        y += 6;
         mergedDoc.text(`Phone: ${claimantPhone}`, 14, y);
         y += 10;
 
-        mergedDoc.setFontSize(11);
+        mergedDoc.setFontSize(12);
         mergedDoc.text('Verification and Return Process', 14, y);
         y += 8;
-        mergedDoc.setFontSize(9);
+        mergedDoc.setFontSize(10);
         mergedDoc.text(`Claim Verification Date: ${formatDate(verificationDate)}`, 14, y);
         y += 6;
         mergedDoc.text(`Verification Officer: ${verificationOfficer}`, 14, y);
         y += 6;
         mergedDoc.text(`Return Method: ${returnMethod}`, 14, y);
 
+        y += 12;
+        mergedDoc.setFontSize(10);
+        mergedDoc.text('Received by:', 14, y);
+        mergedDoc.text('Date:', 120, y);
+        y += 12;
+        mergedDoc.line(14, y, 110, y);
+        mergedDoc.line(120, y, 190, y);
+        mergedDoc.setFontSize(8);
+        mergedDoc.text('Owner with Signature', 20, y + 4);
+
       } catch (itemError) {
         console.error(`Error processing item ${i + 1}:`, itemError);
       }
     }
 
-    // Download the merged PDF
     mergedDoc.save(`Returned_Items_Report_${new Date().toISOString().split('T')[0]}.pdf`);
 
   } catch (error) {
-    console.error('Error downloading all reports:', error);
-    alert('Failed to download reports. Please try again.');
+    console.error('Error downloading reports:', error);
+    alert('Failed to download reports.');
   }
 };
+
 
 const viewItem = async (item) => {
   imageError.value = false;
@@ -2845,17 +3179,8 @@ const removeItemFromLists = (id) => {
 };
 
 async function maybeAutoDeleteReturnedLost(item) {
-  if (!item || item.type !== "lost" || item.status !== "returned") return false;
-  if (!item.id || autoDeletedIds.has(item.id)) return false;
-  try {
-    await axios.delete(`${API_BASE_URL}/api/items/${item.id}`);
-    autoDeletedIds.add(item.id);
-    removeItemFromLists(item.id);
-    return true;
-  } catch (err) {
-    console.error("Error auto-deleting returned lost item:", err);
-    return false;
-  }
+  // We've disabled auto-deletion of returned lost items to preserve history and prevent cascading deletes
+  return false;
 }
 
 const totalReports = computed(() =>
@@ -2886,9 +3211,12 @@ const getUnreadCount = (tab) => {
 socket.on("newReport", async (report) => {
   const item = { ...report, imageError: false, reporterImageError: false };
   if (await maybeAutoDeleteReturnedLost(item)) return;
-  if (item.type === "lost") lostItems.value.unshift(item);
+  if (item.status === "returned" || item.status === "marked_returned") {
+    // ensure claimant info is present for returned/marked_returned items
+    try { await ensureClaimantForItem(item); } catch (e) { /* ignore */ }
+    returnedHistory.value.unshift(item);
+  } else if (item.type === "lost") lostItems.value.unshift(item);
   else if (item.type === "found") foundItems.value.unshift(item);
-  else if (item.status === "returned") returnedHistory.value.unshift(item);
 });
 
 socket.on("reportUpdated", async (updatedReport) => {
@@ -2899,8 +3227,10 @@ socket.on("reportUpdated", async (updatedReport) => {
     reporterImageError: false,
   };
   removeItemFromLists(normalized.id);
-  if (normalized.status === "returned") returnedHistory.value.unshift(normalized);
-  else if (normalized.type === "found") foundItems.value.unshift(normalized);
+  if (normalized.status === "returned" || normalized.status === "marked_returned") {
+    try { await ensureClaimantForItem(normalized); } catch (e) { /* ignore */ }
+    returnedHistory.value.unshift(normalized);
+  } else if (normalized.type === "found") foundItems.value.unshift(normalized);
   else lostItems.value.unshift(normalized);
 });
 
@@ -2911,6 +3241,7 @@ socket.on("reportDeleted", ({ id }) => {
 onMounted(() => {
   fetchItems();
   fetchUsers();
+  settingsStore.fetchSettings();
   // If redirected here after email verification, capture token and show success
   try {
     const params = new URLSearchParams(window.location.search);

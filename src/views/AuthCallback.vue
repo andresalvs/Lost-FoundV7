@@ -252,9 +252,13 @@ const fetchItems = async () => {
   try {
     const res = await axios.get(`${API_BASE_URL}/api/items`);
     const data = res.data.map(i => ({ ...i, imageError: false }));
-    lostItems.value = data.filter(i => i.type === "lost");
+    lostItems.value = data.filter(i => i.type === "lost" && i.status !== "marked_returned");
     foundItems.value = data.filter(i => i.type === "found" && i.status !== "returned");
-    returnedHistory.value = data.filter(i => i.status === "returned");
+    // Include marked_returned for lost items and returned/claimed statuses for found items
+    returnedHistory.value = data.filter(i => 
+      i.status === "marked_returned" || 
+      (i.type === "found" && ["returned", "claimed", "confirmed_claim", "delivered"].includes(i.status))
+    );
   } catch (err) {
     console.error("Error fetching items:", err);
   }
@@ -351,9 +355,9 @@ const getUnreadCount = (tab) => {
 // Real-time updates
 socket.on("newReport", (report) => {
   const item = { ...report, imageError: false };
-  if(item.type === "lost") lostItems.value.unshift(item);
+  if(item.status === "returned") returnedHistory.value.unshift(item);
+  else if(item.type === "lost") lostItems.value.unshift(item);
   else if(item.type === "found") foundItems.value.unshift(item);
-  else if(item.status === "returned") returnedHistory.value.unshift(item);
 });
 
 socket.on("reportUpdated", (updatedReport) => {

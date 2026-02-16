@@ -70,6 +70,16 @@
         <span v-if="activePage === 'office-hours'" class="ml-auto w-1 h-6 bg-emerald-600 rounded-r"></span>
       </button>
 
+      <!-- Settings -->
+      <button
+        @click="selectPage('settings')"
+        :class="[getNavButtonClass('settings'), 'transition duration-150 hover:bg-emerald-300 hover:scale-[1.05]' ]"
+      >
+        <span class="text-lg">⚙️</span>
+        <span class="font-medium">Settings</span>
+        <span v-if="activePage === 'settings'" class="ml-auto w-1 h-6 bg-emerald-600 rounded-r"></span>
+      </button>
+
       <!-- Profile -->
       <button
         @click="() => emit('select-page', 'profile')"
@@ -81,19 +91,6 @@
       </button>
     </nav>
 
-    <!-- Profile Alert Section -->
-    <div v-if="isProfileIncomplete" class="px-4 py-4 border-t border-border dark:border-slate-800">
-      <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg">
-        <div class="flex gap-2">
-          <span class="text-amber-600 dark:text-amber-500 text-lg flex-shrink-0">⚠️</span>
-          <div>
-            <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-100">Complete Your Profile</p>
-            <p class="text-xs text-emerald-800 dark:text-emerald-200 mt-0.5">Update your details for a better experience.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Footer -->
     <div class="px-4 py-3 border-t border-border dark:border-slate-800 text-xs text-muted-foreground text-center">
       <p>Admin Dashboard </p>
@@ -102,7 +99,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 
 // Track active page
 const activePage = ref("dashboard");
@@ -122,11 +119,11 @@ onMounted(() => {
   }
 });
 
-// Check if profile is incomplete
-const isProfileIncomplete = computed(() => {
-  if (!adminUser.value) return true;
-  return !adminUser.value.full_name || !adminUser.value.department || !adminUser.value.contact_number || !adminUser.value.birthday;
-});
+// Check if profile is incomplete - NOT USED
+// const isProfileIncomplete = computed(() => {
+//   if (!adminUser.value) return true;
+//   return !adminUser.value.full_name || !adminUser.value.department || !adminUser.value.contact_number || !adminUser.value.birthday;
+// });
 
 // Emit event to parent when page is selected
 const emit = defineEmits(["select-page"]);

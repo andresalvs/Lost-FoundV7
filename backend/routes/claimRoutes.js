@@ -334,26 +334,21 @@ router.get("/user/:user_id", async (req, res) => {
     const { user_id } = req.params;
     const { limit, offset } = req.query;
 
-    // Count total APPROVED claims for the user as either claimant OR finder of the found item
+    // Count total claims for the user (The one who filed the claim)
     const countRes = await pool.query(
       `SELECT COUNT(*) AS total FROM claims c
-       INNER JOIN items i ON c.item_id = i.id
-       WHERE c.status = $1 
-         AND (c.user_id = $2 OR i.reporter_id = $2)
-       GROUP BY c.status`,
-      ['approved', user_id]
+       WHERE c.user_id = $1`,
+      [user_id]
     );
     const total = parseInt(countRes.rows[0]?.total || 0, 10);
 
-    // Fetch paged APPROVED claims where user is claimant OR finder of the found item
+    // Fetch paged claims where user is claimant
     let sql = `
-      SELECT DISTINCT c.* FROM claims c
-      INNER JOIN items i ON c.item_id = i.id
-      WHERE c.status = $1 
-        AND (c.user_id = $2 OR i.reporter_id = $2)
+      SELECT c.* FROM claims c
+      WHERE c.user_id = $1
       ORDER BY c.created_at DESC
     `;
-    const params = ['approved', user_id];
+    const params = [user_id];
     const lim = parseInt(limit, 10);
     const off = parseInt(offset, 10) || 0;
     if (!Number.isNaN(lim)) {

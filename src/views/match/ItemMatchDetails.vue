@@ -27,7 +27,7 @@
             v-if="match.foundItem?.preview"
             :src="match.foundItem.preview"
             alt="Found Item"
-            class="w-80 h-80 object-cover rounded-lg border-4 border-emerald-500 shadow-md"
+            :class="['w-80 h-80 object-cover rounded-lg border-4 border-emerald-500 shadow-md transition-all duration-300', { 'blur-md': settingsStore.matchResultsBlur }]"
           />
           <div
             v-else
@@ -302,6 +302,15 @@
                 <p class="text-sm font-semibold text-red-700 dark:text-red-300">Closed Today</p>
               </div>
             </div>
+
+            <!-- View Full Schedule Button -->
+            <button 
+              @click="showScheduleModal = true"
+              class="mt-4 w-full flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold hover:underline bg-emerald-50 dark:bg-emerald-900/40 p-2 rounded-lg transition border border-emerald-100 dark:border-emerald-800"
+            >
+              <i class="fas fa-calendar-alt"></i>
+              View Full Schedule
+            </button>
           </div>
           
           <button
@@ -339,15 +348,88 @@
           </div>
         </div>
       </div>
+
+      <!-- Modern Schedule Modal -->
+      <transition 
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="opacity-0 scale-95"
+        enter-to-class="opacity-100 scale-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100 scale-100"
+        leave-to-class="opacity-0 scale-95"
+      >
+        <div v-if="showScheduleModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showScheduleModal = false"></div>
+          
+          <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100 dark:border-gray-800">
+            <!-- Modal Header -->
+            <div class="bg-emerald-600 p-4 text-white flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-clock text-xl"></i>
+                <h3 class="font-bold text-lg">Office Weekly Schedule</h3>
+              </div>
+              <button @click="showScheduleModal = false" class="hover:bg-white/20 p-1 rounded-full transition">
+                <i class="fas fa-times w-6 h-6 flex items-center justify-center"></i>
+              </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-4 max-h-[70vh] overflow-y-auto">
+              <div class="space-y-3">
+                <div v-for="day in weekDays" :key="day.name" 
+                  class="flex items-center justify-between p-3 rounded-xl border transition"
+                  :class="[
+                    day.name === todayName 
+                      ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700 ring-1 ring-emerald-500' 
+                      : 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-800'
+                  ]"
+                >
+                  <div class="flex items-center gap-3">
+                    <span class="font-bold text-gray-700 dark:text-gray-300 w-24">{{ day.name }}</span>
+                    <span v-if="day.name === todayName" class="text-[10px] bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Today</span>
+                  </div>
+                  
+                  <div class="text-right">
+                    <div v-if="day.isOpen" class="flex flex-col">
+                      <span class="text-sm font-bold text-gray-900 dark:text-white">{{ day.open }} - {{ day.close }}</span>
+                      <span class="text-[10px] text-green-600 dark:text-green-400 font-semibold">Open Access</span>
+                    </div>
+                    <span v-else class="text-sm font-semibold text-red-500 dark:text-red-400 italic">Office Closed</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 flex gap-3">
+                <i class="fas fa-info-circle text-blue-500 mt-1"></i>
+                <p class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                   Please visit the security office during these hours to claim your item. Bring your ID for verification.
+                </p>
+              </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-100 dark:border-gray-800">
+              <button 
+                @click="showScheduleModal = false"
+                class="w-full py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold rounded-xl transition"
+              >
+                Close Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
     </teleport>
   </div>
 </template>
 
 <script>
+import { settingsStore } from '../../stores/settings';
+
 export default {
   name: "ItemMatchDetails",
   data() {
     return {
+      settingsStore,
       match: {
         lostItem: {},
         foundItem: {}
@@ -359,6 +441,7 @@ export default {
       showClaimModal: false,
       isLoadingClaim: false,
       isClaimSuccess: false,
+      showScheduleModal: false,
       hasExistingClaim: false,
       isLoading: true,
       weekSchedule: [],
@@ -368,6 +451,15 @@ export default {
     };
   },
   computed: {
+    weekDays() {
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      return this.weekSchedule.map((day, index) => ({
+        name: dayNames[index],
+        isOpen: day.is_open,
+        open: day.is_open ? this.formatTime(day.opening_time) : "Closed",
+        close: day.is_open ? this.formatTime(day.closing_time) : "-",
+      }));
+    },
     isAlreadyClaimed() {
       try {
         const s = (this.match.claim_status || this.match.foundItem?.status || '').toString().toLowerCase();

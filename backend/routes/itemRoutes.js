@@ -11,7 +11,7 @@ const router = express.Router();
  */
 router.get("/", async (req, res) => {
   // Support pagination via query params: limit (int) and offset (int)
-  const { type, category, user_id, status, limit, offset } = req.query;
+  const { type, category, user_id, reporter_id, status, limit, offset } = req.query;
 
   try {
     // Build base WHERE clauses and params so we can reuse for count and data queries
@@ -32,8 +32,10 @@ router.get("/", async (req, res) => {
       whereClauses.push(`i.category = $${params.length}`);
     }
 
-    if (user_id) {
-      params.push(user_id);
+    // Support both 'user_id' and 'reporter_id' as query params for filtering by reporter
+    const effectiveUserId = user_id || reporter_id;
+    if (effectiveUserId) {
+      params.push(effectiveUserId);
       whereClauses.push(`i.reporter_id = $${params.length}`);
     }
 
@@ -51,14 +53,16 @@ router.get("/", async (req, res) => {
 
     // Now fetch page of results
     let dataSql = `SELECT i.*, 
-      u_reporter.full_name AS reporter_name, 
-      u_reporter.email AS reporter_email,
-      u_reporter.contact_number AS reporter_contact,
-      u_reporter.profile_picture AS reporter_profile_picture,
-      u_reporter.id AS reporter_user_id,
-      u_claimant.full_name AS claimant_name, 
-      u_claimant.profile_picture AS claimant_profile_picture
-      ${baseFrom} ${whereSql} ORDER BY i.created_at DESC`;
+    u_reporter.full_name AS reporter_name, 
+    u_reporter.email AS reporter_email,
+    u_reporter.contact_number AS reporter_contact,
+    u_reporter.profile_picture AS reporter_profile_picture,
+    u_reporter.id AS reporter_user_id,
+    CASE WHEN i.reporter_id IS NOT NULL THEN u_reporter.id_number ELSE NULL END AS reporter_student_id,
+    u_claimant.full_name AS transaction_claimant_name, 
+    u_claimant.profile_picture AS transaction_claimant_profile_picture,
+    u_claimant.id_number AS transaction_claimant_student_id
+    ${baseFrom} ${whereSql} ORDER BY i.created_at DESC`;
 
     const lim = parseInt(limit, 10);
     const off = parseInt(offset, 10) || 0;
@@ -104,7 +108,8 @@ router.get("/search", async (req, res) => {
           u_reporter.email AS reporter_email,
           u_reporter.contact_number AS reporter_contact,
           u_reporter.profile_picture AS reporter_profile_picture,
-          u_reporter.id AS reporter_user_id
+          u_reporter.id AS reporter_user_id,
+          CASE WHEN i.reporter_id IS NOT NULL THEN u_reporter.id_number ELSE NULL END AS reporter_student_id
         FROM items i
         LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
         WHERE i.type = 'found'
@@ -131,7 +136,8 @@ router.get("/search", async (req, res) => {
             u_reporter.email AS reporter_email,
             u_reporter.contact_number AS reporter_contact,
             u_reporter.profile_picture AS reporter_profile_picture,
-            u_reporter.id AS reporter_user_id
+            u_reporter.id AS reporter_user_id,
+            CASE WHEN i.reporter_id IS NOT NULL THEN u_reporter.id_number ELSE NULL END AS reporter_student_id
           FROM items i
           LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
           WHERE i.type = 'found'
@@ -156,6 +162,7 @@ router.get("/search", async (req, res) => {
               u_reporter.contact_number AS reporter_contact,
               u_reporter.profile_picture AS reporter_profile_picture,
               u_reporter.id AS reporter_user_id,
+              CASE WHEN i.reporter_id IS NOT NULL THEN u_reporter.id_number ELSE NULL END AS reporter_student_id,
               (1 - (i.embedding <=> $1::vector)) AS similarity_score
             FROM items i
             LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
@@ -180,7 +187,8 @@ router.get("/search", async (req, res) => {
               u_reporter.email AS reporter_email,
               u_reporter.contact_number AS reporter_contact,
               u_reporter.profile_picture AS reporter_profile_picture,
-              u_reporter.id AS reporter_user_id
+              u_reporter.id AS reporter_user_id,
+              CASE WHEN i.reporter_id IS NOT NULL THEN u_reporter.id_number ELSE NULL END AS reporter_student_id
             FROM items i
             LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
             WHERE i.type = 'found'
@@ -470,8 +478,10 @@ router.get("/:id", async (req, res) => {
         u_reporter.contact_number AS reporter_contact,
         u_reporter.profile_picture AS reporter_profile_picture,
         u_reporter.id AS reporter_user_id,
-        u_claimant.full_name AS claimant_name, 
-        u_claimant.profile_picture AS claimant_profile_picture
+        CASE WHEN i.reporter_id IS NOT NULL THEN u_reporter.id_number ELSE NULL END AS reporter_student_id,
+        u_claimant.full_name AS transaction_claimant_name, 
+        u_claimant.profile_picture AS transaction_claimant_profile_picture,
+        u_claimant.id_number AS transaction_claimant_student_id
       FROM items i
       LEFT JOIN users u_reporter ON i.reporter_id = u_reporter.id
       LEFT JOIN users u_claimant ON i.claimant_id = u_claimant.id
@@ -488,7 +498,11 @@ router.get("/:id", async (req, res) => {
       reporter_name: item.reporter_name,
       reporter_email: item.reporter_email,
       reporter_contact: item.reporter_contact,
-      reporter_id: item.reporter_id
+      reporter_id: item.reporter_id,
+      reporter_student_id: item.reporter_student_id,
+      claimant_name: item.claimant_name,
+      claimant_student_id: item.claimant_student_id,
+      claimant_phone_number: item.claimant_phone_number,
     });
 
     res.json(item);
@@ -597,7 +611,22 @@ router.put("/:id", async (req, res) => {
     status,
     type,
     image_url,
+    claimant_name,
+    claimant_student_id,
+    claimant_phone_number,
+    return_date,
   } = req.body;
+
+  // Debug: Log incoming request headers and full body for easier troubleshooting
+  try {
+    console.log(`🌐 PUT /api/items/${id} - Incoming headers:`, {
+      host: req.headers.host,
+      "content-type": req.headers["content-type"],
+    });
+    console.log("🧾 PUT body (raw):", JSON.stringify(req.body, null, 2));
+  } catch (logErr) {
+    console.warn("⚠️ Failed to stringify req.body for debug logging:", logErr);
+  }
 
   try {
     // First, get the current item to check old status
@@ -614,6 +643,35 @@ router.put("/:id", async (req, res) => {
     const reporterId = currentItem.rows[0].reporter_id;
     const itemType = currentItem.rows[0].type;
 
+    // If status is being updated to a 'history' status, and no return_date is provided, set it to now
+    let finalReturnDate = return_date;
+    const historyStatuses = ['returned', 'marked_returned', 'claimed', 'confirmed_claim', 'delivered'];
+    if (historyStatuses.includes(status)) {
+      // Use provided return_date OR current timestamp if none provided
+      finalReturnDate = finalReturnDate || new Date().toISOString();
+      console.log(`📅 Setting return_date to ${finalReturnDate} for status ${status}`);
+    }
+
+    // Prepare SQL params (log them before executing)
+    const sqlParams = [
+      name,
+      description,
+      category,
+      brand,
+      color,
+      location,
+      status,
+      type,
+      image_url,
+      id,
+      claimant_name,
+      claimant_student_id,
+      claimant_phone_number,
+      finalReturnDate,
+    ];
+
+    console.log("🔢 Executing UPDATE with params:", JSON.stringify(sqlParams, null, 2));
+
     // Update the item
     const result = await pool.query(
       `
@@ -628,22 +686,15 @@ router.put("/:id", async (req, res) => {
         status = COALESCE($7, status),
         type = COALESCE($8, type),
         image_url = COALESCE($9, image_url),
+        claimant_name = COALESCE($11, claimant_name),
+        claimant_student_id = COALESCE($12, claimant_student_id),
+        claimant_phone_number = COALESCE($13, claimant_phone_number),
+        return_date = COALESCE($14, return_date),
         updated_at = NOW()
       WHERE id = $10
       RETURNING *;
       `,
-      [
-        name,
-        description,
-        category,
-        brand,
-        color,
-        location,
-        status,
-        type,
-        image_url,
-        id,
-      ]
+      sqlParams
     );
 
     if (result.rowCount === 0) {
@@ -651,6 +702,36 @@ router.put("/:id", async (req, res) => {
     }
 
     const updatedItem = result.rows[0];
+    // Log received claimant fields and full updated DB row for debugging
+    console.log('📥 Received claimant fields:', {
+      claimant_name: claimant_name,
+      claimant_student_id: claimant_student_id,
+      claimant_phone_number: claimant_phone_number,
+    });
+
+    try {
+      console.log('💾 Updated item (DB full row):', JSON.stringify(updatedItem, null, 2));
+    } catch (rowLogErr) {
+      console.log('💾 Updated item (DB):', {
+        id: updatedItem.id,
+        claimant_name: updatedItem.claimant_name,
+        claimant_student_id: updatedItem.claimant_student_id,
+        claimant_phone_number: updatedItem.claimant_phone_number,
+      });
+    }
+
+    // Additional verification: explicitly SELECT the claimant columns from DB
+    try {
+      const verifyRes = await pool.query(
+        `SELECT id, claimant_name, claimant_student_id, claimant_phone_number FROM items WHERE id = $1`,
+        [id]
+      );
+      console.log('🔎 Post-update DB select:', JSON.stringify(verifyRes.rows[0], null, 2));
+    } catch (verifyErr) {
+      console.warn('⚠️ Failed to run post-update verification SELECT:', verifyErr);
+    }
+
+    console.log(`🔍 DEBUG: status=${status}, oldStatus=${oldStatus}, reporterId=${reporterId}, itemType=${itemType}`);
 
     // ✅ If status changed to 'in_security_custody', create a notification for the reporter
     if (status === 'in_security_custody' && oldStatus !== 'in_security_custody' && reporterId && itemType === 'found') {
@@ -682,6 +763,77 @@ router.put("/:id", async (req, res) => {
         }
       } catch (notificationErr) {
         console.error("⚠️ Error creating item received notification:", notificationErr);
+      }
+    }
+
+    // ✅ If status changed to 'returned', notify the reporter of lost items that their item was found and returned
+    // ✅ If status changed to 'marked_returned' for lost items, notify the reporter
+    if (status === 'marked_returned' && oldStatus !== 'marked_returned' && reporterId && itemType === 'lost') {
+      try {
+        console.log(`📢 Attempting to notify reporter ${reporterId} about marked_returned item ${id}`);
+        const notificationResult = await pool.query(
+          `
+          INSERT INTO notifications (user_id, item_id, type, category, is_read, created_at)
+          VALUES ($1, $2, 'item_returned', 'delivery', FALSE, NOW())
+          RETURNING *
+          `,
+          [reporterId, id]
+        );
+
+        const notification = notificationResult.rows[0];
+        console.log(`✅ Notification created:`, notification.id);
+
+        // Emit real-time notification via socket
+        const io = req.app.get("io");
+        if (io) {
+          const payload = {
+            notification_id: notification.id,
+            item_id: id,
+            item_name: updatedItem.name,
+            item_category: updatedItem.category,
+            item_student_id: updatedItem.student_id,
+            message: "Good news! Your lost item has been found and returned. Please check with the security office to claim it.",
+            timestamp: notification.created_at,
+          };
+          io.to(`user_${reporterId}`).emit("itemReturned", payload);
+        }
+      } catch (notificationErr) {
+        console.error("⚠️ Error creating item marked returned notification:", notificationErr);
+        // Don't fail the entire request if notification fails
+      }
+    }
+
+    // ✅ If status changed to 'returned' for found items, notify the reporter (finder)
+    if (status === 'returned' && oldStatus !== 'returned' && reporterId && itemType === 'found') {
+      try {
+        const notificationResult = await pool.query(
+          `
+          INSERT INTO notifications (user_id, item_id, type, category, is_read, created_at)
+          VALUES ($1, $2, 'item_returned_found', 'delivery', FALSE, NOW())
+          RETURNING *
+          `,
+          [reporterId, id]
+        );
+
+        const notification = notificationResult.rows[0];
+
+        // Emit real-time notification via socket
+        const io = req.app.get("io");
+        if (io) {
+          const payload = {
+            notification_id: notification.id,
+            item_id: id,
+            item_name: updatedItem.name,
+            item_category: updatedItem.category,
+            claimant_name: updatedItem.claimant_name,
+            claimant_id: updatedItem.claimant_id,
+            message: "The found item you reported has been claimed and delivered. Thank you for your cooperation.",
+            timestamp: notification.created_at,
+          };
+          io.to(`user_${reporterId}`).emit("itemReturnedFound", payload);
+        }
+      } catch (notificationErr) {
+        console.error("⚠️ Error creating found item returned notification:", notificationErr);
       }
     }
 

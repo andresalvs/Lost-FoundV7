@@ -7,6 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@xenova/transformers": "^2.13.4",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -16,9 +17,9 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "pg": "^8.11.3",
     "socket.io": "^4.8.1",
-    "uuid": "^13.0.0",
-    "@xenova/transformers": "^2.13.4"
+    "uuid": "^13.0.0"
   }
 }

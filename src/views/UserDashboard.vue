@@ -1094,6 +1094,12 @@ export default {
     // ✅ Get claim status display text
     getClaimStatusText(claimedItem) {
       const currentUser = JSON.parse(localStorage.getItem('user'));
+      
+      // If this is a marked_returned item (user's own lost item marked as returned by staff)
+      if (claimedItem.status === 'marked_returned' || claimedItem._isOwnMarkedItem) {
+        return "Marked Returned";
+      }
+      
       if (!currentUser?.id) return "Claimed by Owner";
       
       // If the claimant is the current user, show "Claimed by You"
@@ -2105,6 +2111,31 @@ export default {
       }
     },
 
+    async handleItemReturnedEvent(evt) {
+      try {
+        // Show modal with item details when lost item is marked as returned
+        this.itemReceivedModalData = {
+          itemName: evt.item_name || "Your Item",
+          itemId: evt.item_student_id || null
+        };
+        this.showItemReceivedModal = true;
+
+        // Refresh notifications and claimed items to show the marked_returned item
+        await this.loadNotifications();
+        await this.loadClaimedItems();
+
+        // Send desktop notification
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          new Notification("✅ Item Marked as Returned!", {
+            body: evt.message || "Your lost item has been marked as returned. Please check with the security office.",
+            icon: "/logo.png",
+          });
+        }
+      } catch (e) {
+        console.error("Error handling item returned event:", e);
+      }
+    },
+
     viewMatchDetails(match) {
       if (!match) {
         this.selectedMatch = null;
@@ -2278,23 +2309,62 @@ export default {
       }
     },
 
-    // Load user's claimed items (claims) and enrich with item details
+    // Load user's claimed items (claims) and marked_returned items, then enrich with item details
     async loadClaimedItems() {
       try {
         const user = JSON.parse(localStorage.getItem('user'));
         if (!user?.id) return;
 
-        const res = await fetch(`http://localhost:5000/api/claims/user/${user.id}?limit=${this.claimedLimit}&offset=${this.claimedOffset}`);
-        if (!res.ok) throw new Error('Failed to fetch claimed items');
+        // Fetch both user's claims and their own items marked as returned
+        const [claimsRes, itemsRes] = await Promise.all([
+          fetch(`http://localhost:5000/api/claims/user/${user.id}`),
+          fetch(`http://localhost:5000/api/items?user_id=${user.id}`)
+        ]);
 
-        const data = await res.json();
-        const claims = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []);
+        if (!claimsRes.ok || !itemsRes.ok) throw new Error('Failed to fetch claimed items or user items');
+
+        const claimsData = await claimsRes.json();
+        const itemsData = await itemsRes.json();
+
+        const claims = Array.isArray(claimsData) ? claimsData : (Array.isArray(claimsData?.value) ? claimsData.value : []);
+        // Handle response object { value: [], count: 0 } or direct array
+        const allItems = itemsData.value || (Array.isArray(itemsData) ? itemsData : []);
+
+        // Get IDs of items already in claims to avoid duplicates
+        const claimedItemIds = new Set(claims.map(c => c.item_id));
+
+        // Filter to get user's own items that have been marked/returned
+        // Lost items: status = 'marked_returned' (marked by staff)
+        // Found items: status = 'returned' (marked as returned after claimant received it)
+        // EXCLUSION LOGIC: Only show these in "Claimed Items" card if the user IS the one who reporter_id matches
+        // and we haven't already linked them via a claim.
+        const returnedItems = allItems.filter(item => 
+          item.reporter_id === user.id &&
+          !claimedItemIds.has(item.id) && (
+            (item.status === 'marked_returned' && item.type === 'lost') ||
+            (item.status === 'returned' && item.type === 'found')
+          )
+        );
+
+        // Combine claims with returned items
+        const combinedItems = [
+          ...claims,
+          ...returnedItems.map(item => ({
+            id: item.id,
+            claim_id: null,
+            item_id: item.id,
+            status: 'marked_returned',
+            user_id: user.id,
+            created_at: item.created_at,
+            _isOwnMarkedItem: true // Flag to identify marked_returned items
+          }))
+        ];
+
         // Support both `count` and legacy `Count`
-        this.claimedTotal = typeof data?.count === 'number' ? data.count : (typeof data?.Count === 'number' ? data.Count : (Array.isArray(data) ? data.length : claims.length));
+        this.claimedTotal = combinedItems.length;
 
-        // If backend returned paged results, claims already represent the page
-        const serverPaged = typeof data?.count === 'number' || typeof data?.Count === 'number' || Array.isArray(data?.value);
-        const pagedClaims = serverPaged ? claims : claims.slice(this.claimedOffset, this.claimedOffset + this.claimedLimit);
+        // Paginate the combined results client-side
+        const pagedClaims = combinedItems.slice(this.claimedOffset, this.claimedOffset + this.claimedLimit);
 
         // For each claim on the current page, fetch the item details to display name/type
         // Limit concurrent requests to avoid overwhelming the browser/network
@@ -2332,7 +2402,7 @@ export default {
 
         // Cache to localStorage so lists persist across logout/login
         try { localStorage.setItem('cached_claimed_items', JSON.stringify(this.claimedItems)); } catch (e) { /* ignore */ }
-        console.debug('[UserDashboard] loadClaimedItems: fetched', claims.length, 'claims, paged', pagedClaims.length, 'claimedTotal', this.claimedTotal, 'serverPaged=', serverPaged);
+        console.debug('[UserDashboard] loadClaimedItems: fetched', pagedClaims.length, 'items on page, claimedTotal', this.claimedTotal);
       } catch (err) {
         console.error('❌ Error loading claimed items:', err);
         // Try to load from cache if available
@@ -2384,7 +2454,7 @@ export default {
         });
         // Filter to pending-like statuses across all returned items, then paginate client-side
         const pendingStatuses = ["", "pending", "reported", "reported_lost", "pending_review", "in_security_custody"];
-        const excludedStatuses = ["claimed", "returned", "confirmed_claim", "delivered"];
+        const excludedStatuses = ["claimed", "returned", "marked_returned", "confirmed_claim", "delivered"];
         const pendingAll = mappedAll.filter((r) => {
           const statusNormalized = r.status == null ? "" : String(r.status).toLowerCase().trim();
           // Include if status is in pending list AND NOT in excluded list
@@ -2543,6 +2613,7 @@ export default {
       this.socket.on("claimRejected", this.handleClaimRejectedEvent);
       this.socket.on("itemClaimed", this.handleItemClaimedEvent);
       this.socket.on("itemReceived", this.handleItemReceivedEvent);
+      this.socket.on("itemReturned", this.handleItemReturnedEvent);
       
       // ✅ When socket reconnects, refresh notifications to catch any missed events
       this.socket.on("connect", () => {
@@ -2584,6 +2655,7 @@ export default {
         this.socket.off("claimRejected", this.handleClaimRejectedEvent);
         this.socket.off("itemClaimed", this.handleItemClaimedEvent);
         this.socket.off("itemReceived", this.handleItemReceivedEvent);
+        this.socket.off("itemReturned", this.handleItemReturnedEvent);
         this.socket.off("connect");
         // Do not call disconnect() on the shared socket here. Other components may still need it.
       } catch (e) {

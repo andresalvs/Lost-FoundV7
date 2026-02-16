@@ -1068,8 +1068,8 @@
               <td class="hidden md:table-cell px-4 py-2">
                 <div class="flex items-center space-x-2">
                   <img
-                    v-if="(item.claimant_profile_picture || item.transaction_claimant_profile_picture) && !item.claimantImageError"
-                    :src="`${API_BASE_URL}${item.claimant_profile_picture || item.transaction_claimant_profile_picture}`"
+                    v-if="(item.claimant_profile_picture || item.transaction_claimant_profile_picture || (item.type === 'found' && item.reporter_profile_picture && !item.claimant_name)) && !item.claimantImageError"
+                    :src="`${API_BASE_URL}${item.claimant_profile_picture || item.transaction_claimant_profile_picture || (item.type === 'found' ? item.reporter_profile_picture : '')}`"
                     @error="item.claimantImageError = true"
                     class="w-8 h-8 rounded-full object-cover border border-gray-600"
                   />
@@ -1077,9 +1077,9 @@
                     v-else
                     class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold"
                   >
-                    {{ (item.claimant_name || item.transaction_claimant_name || item.reporter_name) ? (item.claimant_name || item.transaction_claimant_name || item.reporter_name)[0].toUpperCase() : '?' }}
+                    {{ (item.type === 'found' && item.claimant_name ? item.claimant_name : (item.claimant_name || item.transaction_claimant_name || item.reporter_name)) ? (item.type === 'found' && item.claimant_name ? item.claimant_name : (item.claimant_name || item.transaction_claimant_name || item.reporter_name))[0].toUpperCase() : '?' }}
                   </div>
-                  <span>{{ item.claimant_name || item.transaction_claimant_name || item.reporter_name || 'Anonymous' }}</span>
+                  <span>{{ item.type === 'found' && item.claimant_name ? item.claimant_name : (item.claimant_name || item.transaction_claimant_name || item.reporter_name || 'Anonymous') }}</span>
                 </div>
               </td>
               <td class="px-4 py-2">
@@ -1244,7 +1244,7 @@
               </button>
               <button
                 @click="executeDownloadByMonth"
-                :disabled="selectedMonths.size === 0 || isDownloadingAll"
+                :disabled="selectedMonths.size === 0 || isDownloadingAll || isDownloadingExcel"
                 class="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium transition-colors flex items-center gap-2"
               >
                 <svg v-if="!isDownloadingAll" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
@@ -1253,7 +1253,21 @@
                 <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.995-1.039M9.687 16.464l3.181-3.183" />
                 </svg>
-                {{ isDownloadingAll ? 'Generating...' : 'Download' }}
+                {{ isDownloadingAll ? 'Generating...' : 'PDF' }}
+              </button>
+
+              <button
+                @click="executeExcelDownload"
+                :disabled="selectedMonths.size === 0 || isDownloadingAll || isDownloadingExcel"
+                class="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium transition-colors flex items-center gap-2"
+              >
+                <svg v-if="!isDownloadingExcel" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 10.5L12 15m0 0l4.5-4.5M12 15V3" />
+                </svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.995-1.039M9.687 16.464l3.181-3.183" />
+                </svg>
+                {{ isDownloadingExcel ? 'Generating...' : 'Excel' }}
               </button>
             </div>
           </div>
@@ -1383,6 +1397,28 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- Mark as Returned button for Lost Reports -->
+                <div v-if="currentPage === 'lost-reports'" class="border-t-2 border-gray-200 dark:border-gray-700 pt-6 mt-6">
+                  <button
+                    @click="openMarkAsReturnedConfirm(selectedItem)"
+                    class="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold shadow-md hover:shadow-lg text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="isMarkingAsReturned"
+                  >
+                    Mark as Returned
+                  </button>
+                </div>
+
+                <!-- Mark as Returned button for Found Reports -->
+                <div v-if="currentPage === 'found-reports'" class="border-t-2 border-gray-200 dark:border-gray-700 pt-6 mt-6">
+                  <button
+                    @click="openMarkFoundAsReturnedConfirm(selectedItem)"
+                    class="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold shadow-md hover:shadow-lg text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="isMarkingAsReturned"
+                  >
+                    Mark as Returned
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1397,6 +1433,111 @@
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
         </svg>
         <p class="text-lg font-semibold text-gray-800 dark:text-gray-200">Processing claim approval...</p>
+      </div>
+
+      <!-- Processing Loading Overlay (for marking item as returned) -->
+      <div v-if="isMarkingAsReturned" class="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-white/90 dark:bg-black/80 backdrop-blur-sm">
+        <svg class="animate-spin h-16 w-16 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+        </svg>
+        <p class="text-lg font-semibold text-gray-800 dark:text-gray-200">Marking item as returned...</p>
+      </div>
+
+      <!-- Mark as Returned Confirmation Modal -->
+      <div v-if="showMarkAsReturnedConfirm && itemToMarkAsReturned" class="fixed inset-0 z-[99998] flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 md:p-8 max-w-sm w-full border border-gray-200 dark:border-gray-700">
+          <div class="flex items-center justify-center w-12 h-12 mx-auto bg-yellow-100 dark:bg-yellow-900/30 rounded-full mb-4">
+            <svg class="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4v2m0 0a9 9 0 110-18 9 9 0 010 18z" />
+            </svg>
+          </div>
+          <h3 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">
+            Mark Item as Returned?
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 text-center mb-2">
+            <strong>{{ itemToMarkAsReturned.name }}</strong>
+          </p>
+          <p class="text-gray-500 dark:text-gray-500 text-center text-sm mb-6">
+            The reporter will be notified that their lost item has been found and returned.
+          </p>
+          <div class="flex gap-3">
+            <button
+              @click="closeMarkAsReturnedConfirm"
+              class="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-semibold"
+              :disabled="isMarkingAsReturned"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmMarkAsReturned"
+              class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isMarkingAsReturned"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Claimant Information Modal for Found Items -->
+      <div v-if="showClaimantInfoModal && foundItemToMark" class="fixed inset-0 z-[99998] flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full border border-gray-200 dark:border-gray-700">
+          <h3 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">
+            Mark Item as Returned
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 text-center text-sm mb-6">
+            Please enter the claimant information for: <strong>{{ foundItemToMark.name }}</strong>
+          </p>
+          <div class="space-y-4 mb-6">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Claimant Name *</label>
+              <input
+                v-model="claimantInfo.name"
+                type="text"
+                placeholder="Enter claimant's full name"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                :disabled="isMarkingAsReturned"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Student ID</label>
+              <input
+                v-model="claimantInfo.studentId"
+                type="text"
+                placeholder="Enter student ID"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                :disabled="isMarkingAsReturned"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Phone Number *</label>
+              <input
+                v-model="claimantInfo.phoneNumber"
+                type="tel"
+                placeholder="Enter phone number"
+                class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                :disabled="isMarkingAsReturned"
+              />
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <button
+              @click="closeClaimantInfoModal"
+              class="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-semibold"
+              :disabled="isMarkingAsReturned"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmMarkFoundAsReturned"
+              class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isMarkingAsReturned || !claimantInfo.name || !claimantInfo.phoneNumber"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
       </div>
 
       <div
@@ -1854,7 +1995,7 @@
                       </div>
                     </div>
                     <!-- Rest of fields -->
-                    <div v-for="(value, key) in (reviewItem ? Object.fromEntries(Object.entries(reviewItem).filter(([k,v]) => v && !['id','image_url','created_at','imageError','reporter_id','reporter_name','reporter_email','reporter_profile_picture','reporterImageError','type','datetime','category','status','updated_at','name','student_id','department'].includes(k))) : {})" :key="key" class="group">
+                    <div v-for="(value, key) in (reviewItem ? Object.fromEntries(Object.entries(reviewItem).filter(([k,v]) => v && !['id','image_url','created_at','imageError','reporter_id','reporter_name','reporter_email','reporter_profile_picture','reporterImageError','type','datetime','category','status','updated_at','name','student_id','department','embedding'].includes(k))) : {})" :key="key" class="group">
                       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 py-3 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
                         <span class="font-semibold text-gray-700 dark:text-gray-300 capitalize min-w-[120px] text-left sm:text-left">{{ key === 'location' ? 'Location Found' : key.replace(/_/g, ' ') }}</span>
                         <span class="text-gray-900 dark:text-gray-100 font-medium text-left sm:text-right break-words">{{ value }}</span>
@@ -1864,7 +2005,7 @@
                   
                   <!-- For non-ID items, show all fields normally -->
                   <template v-else>
-                    <div v-for="(value, key) in (reviewItem ? Object.fromEntries(Object.entries(reviewItem).filter(([k,v]) => v && !['id','image_url','created_at','imageError','reporter_id','reporter_name','reporter_email','reporter_profile_picture','reporterImageError','type','datetime','category','status','updated_at'].includes(k))) : {})" :key="key" class="group">
+                    <div v-for="(value, key) in (reviewItem ? Object.fromEntries(Object.entries(reviewItem).filter(([k,v]) => v && !['id','image_url','created_at','imageError','reporter_id','reporter_name','reporter_email','reporter_profile_picture','reporterImageError','type','datetime','category','status','updated_at','embedding'].includes(k))) : {})" :key="key" class="group">
                       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 py-3 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
                         <span class="font-semibold text-gray-700 dark:text-gray-300 capitalize min-w-[120px] text-left sm:text-left">{{ key === 'location' ? 'Location Found' : key.replace(/_/g, ' ') }}</span>
                         <span class="text-gray-900 dark:text-gray-100 font-medium text-left sm:text-right break-words">{{ value }}</span>
@@ -2069,6 +2210,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
 import axios from "axios";
+import * as XLSX from 'xlsx';
 import initSocket, { disconnectSocket } from "../socket";
 import ThemeToggle from '../components/ThemeToggle.vue';
 import SecuritySidebar from "../components/SecuritySidebar.vue";
@@ -2188,8 +2330,23 @@ const approvalSuccessData = ref(null); // Will hold { claimant_name, item_name }
 // Loading flag for claim approval flow
 const isApproving = ref(false);
 
+// Loading flag for marking item as returned
+const isMarkingAsReturned = ref(false);
+const showMarkAsReturnedConfirm = ref(false);
+const itemToMarkAsReturned = ref(null);
+
+// For Found Items - Claimant info modal
+const showClaimantInfoModal = ref(false);
+const foundItemToMark = ref(null);
+const claimantInfo = ref({
+  name: "",
+  studentId: "",
+  phoneNumber: ""
+});
+
 // Loading flag for downloading all returned reports
 const isDownloadingAll = ref(false);
+const isDownloadingExcel = ref(false);
 const showDownloadComplete = ref(false);
 
 // Modal for selecting time period before bulk download
@@ -2299,11 +2456,14 @@ const fetchItems = async () => {
         }
       }
     }
-    lostItems.value = data.filter(i => i.type === "lost");
-    // Include both in-custody and returned items in Found Reports for reference
-    foundItems.value = data.filter(i => i.type === "found");
-    // Keep returned history for ALL items with "returned" status (both lost and found)
-    returnedHistory.value = data.filter(i => i.status === "returned");
+    lostItems.value = data.filter(i => i.type === "lost" && i.status !== "marked_returned");
+    // Include only non-returned found items in Found Reports
+    foundItems.value = data.filter(i => i.type === "found" && i.status !== "returned");
+    // Keep returned history for: lost items marked as returned OR found items with returned/claimed statuses
+    const claimedStatuses = ["claimed", "confirmed_claim", "delivered"];
+    returnedHistory.value = data.filter(i => 
+      i.status === "marked_returned" || (i.type === "found" && (i.status === "returned" || claimedStatuses.includes(i.status)))
+    );
 
     // Debug logging
     console.log("📊 Fetched items breakdown:", {
@@ -2348,6 +2508,7 @@ const formatStatus = (status) => {
     'in_security_custody': 'In Custody of the Security Office',
     'In Security Custody': 'In Custody of the Security Office',
     'returned': 'Returned',
+    'marked_returned': 'Marked Returned',
     'pending': 'Lost',
     'lost': 'Lost'
   };
@@ -2679,6 +2840,8 @@ const ensureClaimantForItem = async (item) => {
       item.claimant_email = item.claimant_email || profile.email || profile.user_email || item.claimant_email;
       // Accept various phone/contact column names: contact_number, contact, phone, mobile
       item.claimant_contact = item.claimant_contact || profile.contact_number || profile.contact || profile.phone || profile.mobile || item.claimant_contact;
+      // Track Student ID from profile
+      item.claimant_profile_id_number = profile.id_number || profile.student_id || null;
     }
   } catch (e) {
     // swallow errors - non-critical UI enhancement
@@ -2782,8 +2945,10 @@ const getFullUrl = (path) => {
       }
     } catch (e) { /* ignore */ }
 
-  const universityName = 'Caraga State University';
-  const officeName = 'Security Office';
+  const universityName = 'CARAGA STATE UNIVERSITY';
+  const officeName = 'OFFICE OF THE CAMPUS SAFETY AND SECURITY';
+  const reportLine3 = 'ACKNOWLEDGEMENT RECEIPT';
+  const reportLine4 = 'OF LOST AND FOUND ITEMS';
   const reportDate = new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
 
   const itemDescParts = [];
@@ -2798,7 +2963,22 @@ const getFullUrl = (path) => {
 
   const claimantName = item.claimant_name || item.transaction_claimant_name || item.reporter_name || 'N/A';
   const claimantEmail = item.claimant_email || item.transaction_claimant_email || 'N/A';
-  const claimantPhone = item.claimant_contact || item.transaction_claimant_contact || 'N/A';
+  const claimantStudentId = (item.user_claim_status === 'confirmed_claim' && item.transaction_claimant_student_id)
+    ? item.transaction_claimant_student_id
+    : (item.claimant_student_id || item.transaction_claimant_student_id || item.student_id || item.studentId || 'N/A');
+  const claimantPhone = item.claimant_phone_number || item.claimant_contact || item.transaction_claimant_contact || 'N/A';
+
+  const reporterName = item.reporter_name || item.reporter?.full_name || 'N/A';
+  const reporterEmail = item.reporter_email || item.reporter?.email || 'N/A';
+  let reporterStudentId = item.reporter_student_id || item.reporter?.id_number || item.reporter?.student_id || 'N/A';
+  const reporterPhone = item.reporter_contact || item.reporter?.contact_number || 'N/A';
+
+  if ((reporterStudentId === 'N/A' || !reporterStudentId) && item.reporter_user_id) {
+    try {
+      const profileResp = await axios.get(`${API_BASE_URL}/api/profile/${encodeURIComponent(item.reporter_user_id)}`);
+      if (profileResp?.data?.id_number) reporterStudentId = profileResp.data.id_number;
+    } catch (e) { /* ignore */ }
+  }
 
   const verificationDate = returnDate;
   const verificationOfficer = securityDisplayName.value || 'Security Officer';
@@ -2861,12 +3041,16 @@ const getFullUrl = (path) => {
       item.item_image_url, item.item_image_path
     ];
     // Claimant/reporter-specific candidates used only for claimant image area
+    // For found items manually marked as returned with claimant_name, don't use reporter photo
     const claimantImageCandidates = [
-      item.claimant_profile_picture, item.transaction_claimant_profile_picture, item.transaction_claimant_picture,
-      item.reporter_profile_picture, (item.reporter && item.reporter.profile_picture)
+      item.claimant_profile_picture, 
+      item.transaction_claimant_profile_picture, 
+      item.transaction_claimant_picture,
+      (item.type === 'found' && item.claimant_name) ? null : item.reporter_profile_picture,
+      item.reporter && item.reporter.profile_picture
     ];
     const itemImageData = await loadImageAsDataURL(itemImageCandidates);
-    const claimantImageData = await loadImageAsDataURL(claimantImageCandidates);
+    const claimantImageData = await loadImageAsDataURL(claimantImageCandidates.filter(Boolean));
 
     if (!itemImageData && !claimantImageData) {
       try {
@@ -2888,8 +3072,18 @@ const getFullUrl = (path) => {
       });
     } catch (e) { /* ignore console errors */ }
 
+    // Header: three lines (university, office, report title)
     doc.setFontSize(16);
-    doc.text(`${universityName} - ${officeName}`, 14, y);
+    doc.text(universityName, 14, y);
+    y += 8;
+    doc.setFontSize(14);
+    doc.text(officeName, 14, y);
+    y += 8;
+    doc.setFontSize(12);
+    doc.text(reportLine3, 14, y);
+    y += 7;
+    doc.setFontSize(12);
+    doc.text(reportLine4, 14, y);
     // place item image on the right if exists (detect mime); otherwise draw placeholder box
     if (itemImageData) {
       try {
@@ -2905,9 +3099,10 @@ const getFullUrl = (path) => {
         doc.text('No image', 170, 28, { align: 'center' });
       } catch (e) { /* ignore placeholder draw errors */ }
     }
+    // Ensure text color is reset to black for subsequent text
+    try { doc.setTextColor(0, 0, 0); } catch (e) { /* ignore */ }
     y += 8;
-    doc.setFontSize(14);
-    doc.text('Lost and Found Item Return Report', 14, y);
+    // header printed above
     y += 10;
     doc.setFontSize(10);
     doc.text(`Date of Report: ${reportDate}`, 14, y);
@@ -3030,8 +3225,12 @@ const getFullUrl = (path) => {
         doc.text('No image', 150 + 18, y + 12, { align: 'center' });
       } catch (e) { /* ignore */ }
     }
+    // Reset to black and restore font size so claimant info text is not greyed out/small
+    try { doc.setTextColor(0, 0, 0); doc.setFontSize(10); } catch (e) { /* ignore */ }
     y += 6;
     doc.text(`Email: ${claimantEmail}`, 14, y);
+    y += 6;
+    doc.text(`Student ID: ${claimantStudentId}`, 14, y);
     y += 6;
     doc.text(`Phone: ${claimantPhone}`, 14, y);
     y += 10;
@@ -3048,11 +3247,44 @@ const getFullUrl = (path) => {
     y += 6;
     y += 10;
 
+    // Reporter Information (no profile picture)
+    doc.setFontSize(12);
+    doc.text('Reporter Information', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`Name: ${reporterName}`, 14, y);
+    y += 6;
+    doc.text(`Email: ${reporterEmail}`, 14, y);
+    y += 6;
+    doc.text(`Student ID: ${reporterStudentId}`, 14, y);
+    y += 6;
+    doc.text(`Phone: ${reporterPhone}`, 14, y);
+    y += 10;
+
     doc.text('Report Prepared By:', 14, y);
     y += 6;
     doc.text(`${verificationOfficer}`, 14, y);
     y += 6;
     doc.text(`${securityDisplayEmail.value}`, 14, y);
+    y += 12;
+    // Signature block (Received by / Date)
+    try {
+      const sigY = y;
+      doc.setFontSize(10);
+      doc.text('Received by:', 14, sigY);
+      doc.text('Date:', 120, sigY);
+      // lines for signature and date
+      const lineY = sigY + 8;
+      doc.setDrawColor(0);
+      doc.setLineWidth(0.5);
+      doc.line(14, lineY, 110, lineY); // received signature line
+      doc.line(120, lineY, 190, lineY); // date line
+      // labels under lines
+      doc.setFontSize(9);
+      doc.text('Owner with Signature', 20, lineY + 8);
+      doc.text('', 120, lineY + 8);
+      y = lineY + 16;
+    } catch (e) { /* ignore signature rendering errors */ }
 
     const filename = `CSU_Return_Report_${(item.name || item.id || 'item').toString().replace(/\s+/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`;
     if (download) {
@@ -3121,8 +3353,10 @@ const getFullUrl = (path) => {
       <html><head><title>Return Report</title>
       <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111} h1,h2{color:#222} .img-right{float:right;margin-left:12px;width:140px}</style>
       </head><body>
-      <h1>${universityName} - ${officeName}</h1>
-      <h2>Lost and Found Item Return Report</h2>
+      <h1>${universityName}</h1>
+      <h2>${officeName}</h2>
+      <h3>${reportLine3}</h3>
+      <h4>${reportLine4}</h4>
       <p><strong>Date of Report:</strong> ${reportDate}</p>
       <h3>${isIdHtml ? 'ID Return Details' : 'Item Return Details'}</h3>
       ${itemImgUrl ? `<img src="${itemImgUrl}" class="img-right"/>` : `<div class="img-right" style="width:140px;height:140px;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;color:#888;background:#fafafa">No image</div>`}
@@ -3143,6 +3377,7 @@ const getFullUrl = (path) => {
       ${claimantImgUrl ? `<img src="${claimantImgUrl}" style="width:120px;float:right;margin-left:12px"/>` : `<div style="width:120px;float:right;margin-left:12px;height:120px;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;color:#888;background:#fafafa">No image</div>`}
       <p><strong>Name:</strong> ${claimantName}</p>
       <p><strong>Email:</strong> ${claimantEmail}</p>
+      <p><strong>Student ID:</strong> ${claimantStudentId}</p>
       <p><strong>Phone:</strong> ${claimantPhone}</p>
       <h3>Verification and Return Process</h3>
       <p><strong>Claim Verification Date:</strong> ${formatDate(verificationDate)}</p>
@@ -3327,6 +3562,146 @@ const executeDownloadByMonth = async () => {
   }
 };
 
+// Excel Download Function
+const executeExcelDownload = async () => {
+  if (selectedMonths.value.size === 0 || isDownloadingExcel.value) return;
+  
+  isDownloadingExcel.value = true;
+  try {
+    let itemsToDownload = [];
+    
+    if (selectedMonths.value.has('all-time')) {
+      itemsToDownload = filteredReturnedHistory.value;
+    } else {
+      itemsToDownload = filteredReturnedHistory.value.filter(item => {
+        const returnDate = item.return_date ? new Date(item.return_date) : null;
+        if (!returnDate || isNaN(returnDate.getTime())) return false;
+        
+        const year = returnDate.getFullYear();
+        const month = String(returnDate.getMonth() + 1).padStart(2, '0');
+        const itemMonthKey = `${year}-${month}`;
+        
+        return selectedMonths.value.has(itemMonthKey);
+      });
+    }
+    
+    if (!itemsToDownload || itemsToDownload.length === 0) {
+      alert('No reports to download for the selected period.');
+      return;
+    }
+
+    // Helper to format date
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'N/A';
+      try {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch (e) { return 'N/A'; }
+    };
+
+    // Separate and map data
+    const idData = [];
+    const itemData = [];
+
+    // Use a for-loop for async/await fetching of profile data
+    for (let i = 0; i < itemsToDownload.length; i++) {
+      let item = itemsToDownload[i];
+      
+      // Fetch fresh data and ensure claimant info for accurate Student IDs
+      try {
+        const id = item.id || item.item_id || item._id || item.itemId;
+        if (id && !String(id).startsWith('txn-')) {
+          const res = await axios.get(`${API_BASE_URL}/api/items/${encodeURIComponent(id)}`);
+          if (res && res.data) {
+            item = Object.assign({}, item, res.data);
+          }
+        }
+      } catch (e) { /* fallback to existing item data */ }
+      
+      await ensureClaimantForItem(item).catch(() => {});
+
+      const isId = (item.category === 'id' || item.is_id || item.student_id);
+      
+      // Compute the claimant student ID based on user requirement
+      // Support multiple naming conventions from different stages of the data pipeline
+      const finalClaimantStudentId = item.claimant_student_id || item.claimantStudentId || item.claimant_profile_id_number || item.transaction_claimant_student_id || 'N/A';
+      const finalContactNumber = item.claimant_phone_number || item.claimantPhoneNumber || item.claimant_contact || item.transaction_claimant_contact || 'N/A';
+      const finalClaimantName = item.claimant_name || item.claimantName || item.transaction_claimant_name || item.reporter_name || 'N/A';
+
+      if (isId) {
+        idData.push({
+          'Student Name': item.name || 'N/A',
+          'Student ID #': item.student_id || 'N/A',
+          'Department': item.department || 'N/A',
+          'Course/Program': item.course || 'N/A',
+          'Status': item.status || 'Returned',
+          'Claimant Name': finalClaimantName,
+          'Claimant Student ID #': finalClaimantStudentId,
+          'Contact Number': finalContactNumber,
+          'Return Date': formatDate(item.return_date)
+        });
+      } else {
+        itemData.push({
+          'Item Name': item.name || 'N/A',
+          'Brand': item.brand || 'N/A',
+          'Color': item.color || 'N/A',
+          'Description': item.description || 'N/A',
+          'Status': item.status || 'Returned',
+          'Claimant Name': finalClaimantName,
+          'Claimant Student ID #': finalClaimantStudentId,
+          'Contact Number': finalContactNumber,
+          'Return Date': formatDate(item.return_date)
+        });
+      }
+    }
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+
+    // Add ID Sheet if data exists
+    if (idData.length > 0) {
+      const idWorksheet = XLSX.utils.json_to_sheet(idData);
+      // Auto-size columns
+      const id_max_width = idData.reduce((w, r) => Math.max(w, ...Object.values(r).map(v => String(v).length)), 15);
+      idWorksheet['!cols'] = Object.keys(idData[0]).map(() => ({ wch: id_max_width + 2 }));
+      XLSX.utils.book_append_sheet(workbook, idWorksheet, "Returned IDs");
+    }
+
+    // Add Item Sheet if data exists
+    if (itemData.length > 0) {
+      const itemWorksheet = XLSX.utils.json_to_sheet(itemData);
+      // Auto-size columns
+      const item_max_width = itemData.reduce((w, r) => Math.max(w, ...Object.values(r).map(v => String(v).length)), 15);
+      itemWorksheet['!cols'] = Object.keys(itemData[0]).map(() => ({ wch: item_max_width + 2 }));
+      XLSX.utils.book_append_sheet(workbook, itemWorksheet, "Returned Items");
+    }
+
+    // If both are empty (shouldn't happen due to check above), add a placeholder
+    if (idData.length === 0 && itemData.length === 0) {
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([{ Message: 'No data' }]), "Empty");
+    }
+
+    // Export file
+    const fileName = `Returned_Reports_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+
+    // Show completion message
+    showDownloadComplete.value = true;
+    
+    // Auto-close modal after 2 seconds
+    setTimeout(() => {
+      showDownloadModal.value = false;
+      showDownloadComplete.value = false;
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Excel Export Error:', error);
+    alert('Failed to generate Excel file.');
+  } finally {
+    isDownloadingExcel.value = false;
+  }
+};
+
 // Download all returned history items as a single combined PDF (respects current filters)
 const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
   if (!itemsToDownload || itemsToDownload.length === 0) {
@@ -3349,8 +3724,28 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
     let isFirstPage = true;
 
     for (let i = 0; i < totalItems; i++) {
-      const item = itemsToDownload[i];
+      let item = itemsToDownload[i];
       try {
+        // Try to fetch freshest item data from backend (same logic as single report)
+        try {
+          const id = item.id || item.item_id || item._id || item.itemId;
+          if (id) {
+            try {
+              const sid = String(id || '');
+              const looksLikeNumeric = /^[0-9]+$/.test(sid);
+              const looksLikeUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(sid);
+              if (!sid.startsWith('txn-') && (looksLikeNumeric || looksLikeUUID)) {
+                try {
+                  const res = await axios.get(`${API_BASE_URL}/api/items/${encodeURIComponent(id)}`);
+                  if (res && res.data) {
+                    item = Object.assign({}, item, res.data);
+                  }
+                } catch (e) { /* ignore fetch errors */ }
+              }
+            } catch (e) { /* ignore id parsing errors */ }
+          }
+        } catch (e) { /* ignore fetch prep errors */ }
+
         // Ensure claimant data
         await ensureClaimantForItem(item).catch(() => {});
 
@@ -3361,8 +3756,10 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
         isFirstPage = false;
 
         // Generate report content for this item
-        const universityName = 'Caraga State University';
-        const officeName = 'Security Office';
+        const universityName = 'CARAGA STATE UNIVERSITY';
+        const officeName = 'OFFICE OF THE CAMPUS SAFETY AND SECURITY';
+        const reportLine3 = 'ACKNOWLEDGEMENT RECEIPT';
+        const reportLine4 = 'OF LOST AND FOUND ITEMS';
         const reportDate = new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
 
         const itemDescParts = [];
@@ -3376,14 +3773,38 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
         const returnDate = item.return_date || new Date().toISOString();
         const claimantName = item.claimant_name || item.transaction_claimant_name || item.reporter_name || 'N/A';
         const claimantEmail = item.claimant_email || item.transaction_claimant_email || 'N/A';
-        const claimantPhone = item.claimant_contact || item.transaction_claimant_contact || 'N/A';
+        const claimantStudentId = (item.user_claim_status === 'confirmed_claim' && item.transaction_claimant_student_id)
+          ? item.transaction_claimant_student_id
+          : (item.claimant_student_id || item.transaction_claimant_student_id || item.student_id || item.studentId || 'N/A');
+        const claimantPhone = item.claimant_phone_number || item.claimant_contact || item.transaction_claimant_contact || 'N/A';
+        const reporterName = item.reporter_name || item.reporter?.full_name || 'N/A';
+        const reporterEmail = item.reporter_email || item.reporter?.email || 'N/A';
+        let reporterStudentId = item.reporter_student_id || item.reporter?.id_number || item.reporter?.student_id || 'N/A';
+        const reporterPhone = item.reporter_contact || item.reporter?.contact_number || 'N/A';
+
+        if ((reporterStudentId === 'N/A' || !reporterStudentId) && item.reporter_user_id) {
+          try {
+            const profileResp = await axios.get(`${API_BASE_URL}/api/profile/${encodeURIComponent(item.reporter_user_id)}`);
+            if (profileResp?.data?.id_number) reporterStudentId = profileResp.data.id_number;
+          } catch (e) { /* ignore */ }
+        }
         const verificationDate = returnDate;
         const verificationOfficer = securityDisplayName.value || 'Security Officer';
         const returnMethod = item.return_method || 'In-person pickup';
 
         let y = 14;
+        // Header: three lines (university, office, report title)
         mergedDoc.setFontSize(16);
-        mergedDoc.text(`${universityName} - ${officeName}`, 14, y);
+        mergedDoc.text(universityName, 14, y);
+        y += 8;
+        mergedDoc.setFontSize(14);
+        mergedDoc.text(officeName, 14, y);
+        y += 8;
+        mergedDoc.setFontSize(12);
+        mergedDoc.text(reportLine3, 14, y);
+        y += 7;
+        mergedDoc.setFontSize(12);
+        mergedDoc.text(reportLine4, 14, y);
         
         // Load and embed images (item image on right)
         const loadImageAsDataURL = async (candidates) => {
@@ -3433,8 +3854,11 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
           item.item_image_url, item.item_image_path
         ];
         const claimantImageCandidates = [
-          item.claimant_profile_picture, item.transaction_claimant_profile_picture, item.transaction_claimant_picture,
-          item.reporter_profile_picture, (item.reporter && item.reporter.profile_picture)
+          item.claimant_profile_picture,
+          item.transaction_claimant_profile_picture,
+          item.transaction_claimant_picture,
+          (item.type === 'found' && item.claimant_name) ? null : item.reporter_profile_picture,
+          item.reporter && item.reporter.profile_picture
         ];
         
         const itemImageData = await loadImageAsDataURL(itemImageCandidates);
@@ -3455,10 +3879,11 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
             mergedDoc.text('No image', 170, 28, { align: 'center' });
           } catch (e) { /* ignore placeholder draw errors */ }
         }
+        // Reset to black and restore font size for claimant info text
+        try { mergedDoc.setTextColor(0, 0, 0); mergedDoc.setFontSize(10); } catch (e) { /* ignore */ }
         
         y += 8;
-        mergedDoc.setFontSize(14);
-        mergedDoc.text('Lost and Found Item Return Report', 14, y);
+        // header printed above
         y += 10;
         mergedDoc.setFontSize(10);
         mergedDoc.text(`Date of Report: ${reportDate}`, 14, y);
@@ -3514,15 +3939,15 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
             startY: y,
             head: [['Field', 'Value']],
             body: rows,
-            styles: { fontSize: 9 },
+            styles: { fontSize: 10 },
             headStyles: { fillColor: [41, 128, 185], textColor: 255 }
           });
           y = mergedDoc.lastAutoTable ? mergedDoc.lastAutoTable.finalY + 8 : y + (rows.length * 6) + 8;
         } else {
-          mergedDoc.setFontSize(11);
+          mergedDoc.setFontSize(12);
           mergedDoc.text(isId ? 'ID Return Details' : 'Item Return Details', 14, y);
           y += 8;
-          mergedDoc.setFontSize(9);
+          mergedDoc.setFontSize(10);
           rows.forEach(([k, v]) => {
             mergedDoc.text(`${k}: ${v}`, 14, y);
             y += 6;
@@ -3531,10 +3956,10 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
         }
 
         y += 8;
-        mergedDoc.setFontSize(11);
+        mergedDoc.setFontSize(12);
         mergedDoc.text('Claimant Information', 14, y);
         y += 8;
-        mergedDoc.setFontSize(9);
+        mergedDoc.setFontSize(10);
         mergedDoc.text(`Name: ${claimantName}`, 14, y);
         
         // Place claimant image on the right
@@ -3550,24 +3975,70 @@ const downloadAllReturnedReportsWithItems = async (itemsToDownload) => {
             mergedDoc.setFontSize(7);
             mergedDoc.setTextColor(120);
             mergedDoc.text('No image', 150 + 18, y + 12, { align: 'center' });
+            // reset color/font after placeholder so subsequent text is black
+            mergedDoc.setTextColor(0, 0, 0);
+            mergedDoc.setFontSize(10);
           } catch (e) { /* ignore */ }
         }
         
         y += 6;
         mergedDoc.text(`Email: ${claimantEmail}`, 14, y);
         y += 6;
+        mergedDoc.text(`Student ID: ${claimantStudentId}`, 14, y);
+        y += 6;
         mergedDoc.text(`Phone: ${claimantPhone}`, 14, y);
         y += 10;
 
-        mergedDoc.setFontSize(11);
+        // Reporter Information (no profile picture)
+        mergedDoc.setFontSize(12);
+        mergedDoc.text('Reporter Information', 14, y);
+        y += 8;
+        mergedDoc.setFontSize(10);
+        mergedDoc.text(`Name: ${reporterName}`, 14, y);
+        y += 6;
+        mergedDoc.text(`Email: ${reporterEmail}`, 14, y);
+        y += 6;
+        mergedDoc.text(`Student ID: ${reporterStudentId}`, 14, y);
+        y += 6;
+        mergedDoc.text(`Phone: ${reporterPhone}`, 14, y);
+        y += 10;
+
+        mergedDoc.setFontSize(12);
         mergedDoc.text('Verification and Return Process', 14, y);
         y += 8;
-        mergedDoc.setFontSize(9);
+        mergedDoc.setFontSize(10);
         mergedDoc.text(`Claim Verification Date: ${formatDate(verificationDate)}`, 14, y);
         y += 6;
         mergedDoc.text(`Verification Officer: ${verificationOfficer}`, 14, y);
         y += 6;
         mergedDoc.text(`Return Method: ${returnMethod}`, 14, y);
+
+        // Report Prepared By and signature block
+        // add extra vertical space before the prepared-by block
+        y += 12;
+        mergedDoc.setFontSize(12);
+        mergedDoc.text('Report Prepared By:', 14, y);
+        y += 6;
+        mergedDoc.setFontSize(10);
+        mergedDoc.text(`${verificationOfficer}`, 14, y);
+        y += 6;
+        mergedDoc.text(`${securityDisplayEmail.value}`, 14, y);
+
+        y += 12;
+        try {
+          const sigY = y;
+          mergedDoc.setFontSize(10);
+          mergedDoc.text('Received by:', 14, sigY);
+          mergedDoc.text('Date:', 120, sigY);
+          const lineY = sigY + 8;
+          mergedDoc.setDrawColor(0);
+          mergedDoc.setLineWidth(0.5);
+          mergedDoc.line(14, lineY, 110, lineY);
+          mergedDoc.line(120, lineY, 190, lineY);
+          mergedDoc.setFontSize(9);
+          mergedDoc.text('Owner with Signature', 20, lineY + 8);
+          y = lineY + 16;
+        } catch (e) { /* ignore signature rendering errors */ }
 
       } catch (itemError) {
         console.error(`Error processing item ${i + 1}:`, itemError);
@@ -4337,22 +4808,20 @@ const handleNewReport = (newReport) => {
     returnedHistory.value.some((i) => i.id === newReport.id);
   if (exists) return;
 
-  if (newReport.type === "lost") {
+  if (newReport.status === "returned") {
+    // attempt to populate claimant info
+    ensureClaimantForItem(reportWithFlags).catch(() => {});
+    returnedHistory.value.unshift(reportWithFlags);
+    unreadReturnedCount.value++;
+    highlightNewItem(newReport.id);
+  } else if (newReport.type === "lost") {
     lostItems.value.unshift(reportWithFlags);
     unreadLostCount.value++;
     highlightNewItem(newReport.id);
   } else if (newReport.type === "found") {
-    if (newReport.status === "returned") {
-      // attempt to populate claimant info
-      ensureClaimantForItem(reportWithFlags).catch(() => {});
-      returnedHistory.value.unshift(reportWithFlags);
-      unreadReturnedCount.value++;
-      highlightNewItem(newReport.id);
-    } else {
-      foundItems.value.unshift(reportWithFlags);
-      unreadFoundCount.value++;
-      highlightNewItem(newReport.id);
-    }
+    foundItems.value.unshift(reportWithFlags);
+    unreadFoundCount.value++;
+    highlightNewItem(newReport.id);
   }
 };
 
@@ -4464,7 +4933,6 @@ const confirmReturn = async () => {
 
   const item = returnItem.value;
   const itemId = item.id;
-  const isLostItem = String(item.type || "").toLowerCase() === "lost";
 
   try {
     // Update status to returned on server
@@ -4501,15 +4969,6 @@ const confirmReturn = async () => {
 
     // Notify other listeners
     socket.emit("updateReport", updated);
-
-    // If this was a lost-type item, some backends may want it deleted from items table.
-    if (isLostItem) {
-      try {
-        await axios.delete(`${API_BASE_URL}/api/items/${itemId}`);
-      } catch (e) {
-        console.warn("Failed to delete lost item after marking returned:", e);
-      }
-    }
 
     // Reconcile authoritative lists in background
     fetchItems().catch(() => {});
@@ -5111,6 +5570,156 @@ const openReturnModal = (item) => (returnItem.value = item);
 
 const viewReporterProfile = (reporterId) => {
   if (reporterId) router.push(`/view-profile/${reporterId}`);
+};
+
+const openMarkAsReturnedConfirm = (item) => {
+  itemToMarkAsReturned.value = item;
+  showMarkAsReturnedConfirm.value = true;
+};
+
+const closeMarkAsReturnedConfirm = () => {
+  showMarkAsReturnedConfirm.value = false;
+  itemToMarkAsReturned.value = null;
+};
+
+const confirmMarkAsReturned = async () => {
+  if (!itemToMarkAsReturned.value) return;
+  await markAsReturned(itemToMarkAsReturned.value);
+};
+
+const markAsReturned = async (item) => {
+  if (!item || !item.id) {
+    if (Notification.permission === "granted") {
+      new Notification("Error", { body: "Item not found" });
+    }
+    return;
+  }
+
+  isMarkingAsReturned.value = true;
+  const now = new Date().toISOString();
+
+  try {
+    // For lost items, use "marked_returned" status; for found items, use "returned"
+    const statusToSet = item.type === "lost" ? "marked_returned" : "returned";
+    console.log(`🔄 Marking item ${item.id} (type: ${item.type}) as "${statusToSet}"`);
+    
+    // Update the item status in the backend
+    const updateResponse = await axios.put(`${API_BASE_URL}/api/items/${item.id}`, {
+      status: statusToSet,
+      return_date: now
+    });
+
+    console.log(`✅ Update response:`, updateResponse.data);
+
+    if (updateResponse.status === 200 || updateResponse.status === 204) {
+      // Fetch the complete updated item data
+      const fetchResponse = await axios.get(`${API_BASE_URL}/api/items/${item.id}`);
+      const updatedItem = fetchResponse.data;
+      console.log(`✅ Fetched updated item:`, updatedItem);
+
+      if (Notification.permission === "granted") {
+        new Notification("✅ Success", { body: "Item marked as returned successfully!" });
+      }
+      
+      // Remove from lostItems
+      lostItems.value = lostItems.value.filter(i => i.id !== item.id);
+      console.log(`✅ Removed from lostItems, remaining:`, lostItems.value.length);
+      
+      // Add to returnedHistory with the complete updated item data
+      returnedHistory.value.unshift({
+        ...updatedItem,
+        imageError: false,
+        reporterImageError: false,
+        claimantImageError: false
+      });
+      console.log(`✅ Added to returnedHistory, now has:`, returnedHistory.value.length);
+      
+      closeModal();
+      closeMarkAsReturnedConfirm();
+    }
+  } catch (error) {
+    console.error("Error marking item as returned:", error);
+    if (Notification.permission === "granted") {
+      new Notification("❌ Error", { body: "Failed to mark item as returned" });
+    }
+  } finally {
+    isMarkingAsReturned.value = false;
+  }
+};
+
+// Found Items - Mark as Returned with Claimant Info
+const openMarkFoundAsReturnedConfirm = (item) => {
+  foundItemToMark.value = item;
+  claimantInfo.value = {
+    name: "",
+    studentId: "",
+    phoneNumber: ""
+  };
+  showClaimantInfoModal.value = true;
+};
+
+const closeClaimantInfoModal = () => {
+  showClaimantInfoModal.value = false;
+  foundItemToMark.value = null;
+  claimantInfo.value = {
+    name: "",
+    studentId: "",
+    phoneNumber: ""
+  };
+};
+
+const confirmMarkFoundAsReturned = async () => {
+  if (!foundItemToMark.value || !claimantInfo.value.name || !claimantInfo.value.phoneNumber) {
+    if (Notification.permission === "granted") {
+      new Notification("Error", { body: "Please enter claimant name and phone number" });
+    }
+    return;
+  }
+  
+  isMarkingAsReturned.value = true;
+  const now = new Date().toISOString();
+
+  try {
+    // Update the item status in the backend with claimant info
+    const updateResponse = await axios.put(`${API_BASE_URL}/api/items/${foundItemToMark.value.id}`, {
+      status: "returned",
+      claimant_name: claimantInfo.value.name,
+      claimant_student_id: claimantInfo.value.studentId,
+      claimant_phone_number: claimantInfo.value.phoneNumber,
+      return_date: now
+    });
+
+    if (updateResponse.status === 200 || updateResponse.status === 204) {
+      // Fetch the complete updated item data
+      const fetchResponse = await axios.get(`${API_BASE_URL}/api/items/${foundItemToMark.value.id}`);
+      const updatedItem = fetchResponse.data;
+
+      if (Notification.permission === "granted") {
+        new Notification("✅ Success", { body: "Item marked as returned successfully!" });
+      }
+      
+      // Remove from foundItems
+      foundItems.value = foundItems.value.filter(i => i.id !== foundItemToMark.value.id);
+      
+      // Add to returnedHistory with the complete updated item data
+      returnedHistory.value.unshift({
+        ...updatedItem,
+        imageError: false,
+        reporterImageError: false,
+        claimantImageError: false
+      });
+      
+      closeModal();
+      closeClaimantInfoModal();
+    }
+  } catch (error) {
+    console.error("Error marking found item as returned:", error);
+    if (Notification.permission === "granted") {
+      new Notification("❌ Error", { body: "Failed to mark item as returned" });
+    }
+  } finally {
+    isMarkingAsReturned.value = false;
+  }
 };
 
 const logout = () => {

@@ -488,7 +488,7 @@
             <img
               :src="formatImageUrl(item.image_url)"
               alt="Found Item"
-              class="w-full h-full object-cover hover:scale-105 transition-transform duration-300 blur-sm"
+              :class="['w-full h-full object-cover hover:scale-105 transition-transform duration-300', { 'blur-sm': settingsStore.privacyBlur }]"
             />
           </div>
           <div class="p-5">
@@ -547,12 +547,12 @@
     <!-- Claim Request Modal (uses existing logic in script) -->
     <div
       v-if="showClaimModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 px-4 py-6"
+      class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 px-4 py-6 pb-20 md:pb-6 overflow-y-auto"
       @click="closeClaimModal"
     >
       <div
         @click.stop
-        class="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-700 shadow-xl animate-fade-in"
+        class="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-700 shadow-xl animate-fade-in my-8"
       >
         <div class="flex justify-between items-start mb-4">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Claim Item</h3>
@@ -560,8 +560,9 @@
         </div>
 
         <div class="flex flex-col items-center gap-4 mb-4 text-center">
-          <div class="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 mx-auto">
-            <img v-if="selectedClaimItem && selectedClaimItem.image_url" :src="formatImageUrl(selectedClaimItem.image_url)" alt="item" class="w-full h-full object-cover blur-sm" />
+          <div class="w-40 h-40 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 mx-auto">
+            <img v-if="selectedClaimItem && selectedClaimItem.image_url" :src="formatImageUrl(selectedClaimItem.image_url)" alt="item" 
+              :class="['w-full h-full object-cover', { 'blur-sm': settingsStore.privacyBlur }]" />
           </div>
           <div>
             <p class="text-sm text-gray-600 dark:text-gray-400">You are claiming:</p>
@@ -677,11 +678,13 @@
 import axios from "axios";
 import jsQR from "jsqr";
 import Fuse from "fuse.js";
+import { settingsStore } from "../stores/settings";
 
 export default {
   name: "SearchPage",
   data() {
     return {
+      settingsStore,
       predictedImage: null, // Holds the base64 image returned by Flask
       errorMessage: '', // Holds any error message
       classNames: '', // Holds the single classname string returned by Flask (top detection)
@@ -1549,6 +1552,9 @@ export default {
     },
   },
   async mounted() {
+    // Ensure settings are fresh
+    this.settingsStore.fetchSettings();
+
     // Restore authenticated context so the search API knows who is searching.
     try {
       const storedUser = JSON.parse(localStorage.getItem("user") || "null");

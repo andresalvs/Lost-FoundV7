@@ -1001,16 +1001,17 @@ router.get("/items", async (req, res) => {
  */
 router.put("/items/:id", async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
-
-  console.log(`\n📝 PUT /items/:id called`);
-  console.log(`   - ID: ${id}`);
-  console.log(`   - Status: ${status}`);
+  const { status, claimant_name, claimant_student_id, claimant_phone_number } = req.body;
 
   try {
     const result = await pool.query(
-      "UPDATE items SET status = $1 WHERE id = $2 RETURNING *",
-      [status, id]
+      `UPDATE items SET
+         status = $1,
+         claimant_name = CASE WHEN TRIM(COALESCE($3, '')) != '' THEN TRIM($3) ELSE claimant_name END,
+         claimant_student_id = CASE WHEN TRIM(COALESCE($4, '')) != '' THEN TRIM($4) ELSE claimant_student_id END,
+         claimant_phone_number = CASE WHEN TRIM(COALESCE($5, '')) != '' THEN TRIM($5) ELSE claimant_phone_number END
+       WHERE id = $2 RETURNING *`,
+      [status, id, claimant_name, claimant_student_id, claimant_phone_number]
     );
 
     if (result.rowCount === 0) {
@@ -1018,8 +1019,6 @@ router.put("/items/:id", async (req, res) => {
     }
 
     const updatedItem = result.rows[0];
-    console.log(`   - Item type: ${updatedItem.type}`);
-    console.log(`   - Current status: ${status}`);
 
     // ✅ MATCHING LOGIC: Trigger fuzzy matching when found item is accepted by security
     if (updatedItem.type === 'found' && status === 'in_security_custody') {
@@ -1326,22 +1325,9 @@ router.delete("/items/:id", async (req, res) => {
     }
 
   const item = itemRes.rows[0];
-  const shouldCascade = item.status === "returned";
+  const shouldCascade = false; // We disabled cascading deletions to prevent losing matched reports
 
     const counterpartIds = await deleteItemCascade(item, shouldCascade);
-
-    if (shouldCascade && counterpartIds.length > 0) {
-      for (const counterpartId of counterpartIds) {
-        if (!counterpartId || deletedIds.has(counterpartId)) continue;
-        const counterpartRes = await client.query(
-          "SELECT * FROM items WHERE id = $1",
-          [counterpartId]
-        );
-        if (counterpartRes.rowCount === 0) continue;
-        const counterpartItem = counterpartRes.rows[0];
-        await deleteItemCascade(counterpartItem, false);
-      }
-    }
 
     await client.query("COMMIT");
 
